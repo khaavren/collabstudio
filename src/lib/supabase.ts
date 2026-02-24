@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import type { PostgrestError } from "@supabase/supabase-js";
 import type {
   Annotation,
   Asset,
@@ -14,7 +15,29 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 
-export const supabase = createClient(supabaseUrl ?? "", supabaseAnonKey ?? "");
+// Prevent hard crashes when env vars are missing in production builds.
+const fallbackSupabaseUrl = "https://example.supabase.co";
+const fallbackSupabaseAnonKey = "public-anon-key-placeholder";
+
+export const supabase = createClient(
+  isSupabaseConfigured ? supabaseUrl : fallbackSupabaseUrl,
+  isSupabaseConfigured ? supabaseAnonKey : fallbackSupabaseAnonKey
+);
+
+function toUserErrorMessage(error: PostgrestError | Error) {
+  const message = error.message ?? "";
+  const code = "code" in error ? error.code : undefined;
+
+  if (code === "42501" || message.toLowerCase().includes("row-level security")) {
+    return "Write access is blocked. Enable Supabase Anonymous auth, then retry.";
+  }
+
+  if (code === "23505") {
+    return "That room name already exists. Try a different name.";
+  }
+
+  return message || "Unexpected Supabase error.";
+}
 
 export async function ensureAnonSession() {
   if (!isSupabaseConfigured) return;
@@ -22,7 +45,12 @@ export async function ensureAnonSession() {
   const { data } = await supabase.auth.getSession();
   if (data.session) return;
 
-  await supabase.auth.signInAnonymously();
+  const { error } = await supabase.auth.signInAnonymously();
+  if (error) {
+    throw new Error(
+      "Anonymous sign-in failed. Enable Auth > Providers > Anonymous in Supabase."
+    );
+  }
 }
 
 export async function fetchRooms() {
@@ -32,14 +60,29 @@ export async function fetchRooms() {
 }
 
 export async function createRoom(name: string, slug: string) {
-  const { data, error } = await supabase
-    .from("rooms")
-    .insert({ name, slug })
-    .select("*")
-    .single();
+  const baseSlug = slug;
 
-  if (error) throw error;
-  return data as Room;
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const candidateSlug = attempt === 0 ? baseSlug : `${baseSlug}-${attempt + 1}`;
+
+    const { data, error } = await supabase
+      .from("rooms")
+      .insert({ name, slug: candidateSlug })
+      .select("*")
+      .single();
+
+    if (!error && data) {
+      return data as Room;
+    }
+
+    if (error?.code === "23505") {
+      continue;
+    }
+
+    throw new Error(toUserErrorMessage(error ?? new Error("Unable to create room.")));
+  }
+
+  throw new Error("Unable to create room after multiple slug attempts.");
 }
 
 export async function fetchAssetsForRoom(roomId: string) {
@@ -49,7 +92,7 @@ export async function fetchAssetsForRoom(roomId: string) {
     .eq("room_id", roomId)
     .order("updated_at", { ascending: false });
 
-  if (assetsError) throw assetsError;
+  if (assetsError) throw new Error(toUserErrorMessage(assetsError));
 
   const assetRows = (assets ?? []) as Asset[];
   if (assetRows.length === 0) return [];
@@ -60,7 +103,7 @@ export async function fetchAssetsForRoom(roomId: string) {
     .select("*")
     .in("asset_id", assetIds);
 
-  if (tagsError) throw tagsError;
+  if (tagsError) throw new Error(toUserErrorMessage(tagsError));
 
   const tagsByAsset = new Map<string, string[]>();
   (tags as AssetTag[]).forEach((entry) => {
@@ -94,9 +137,9 @@ export async function fetchAssetDetails(assetId: string) {
       .order("created_at", { ascending: true })
   ]);
 
-  if (versionsQuery.error) throw versionsQuery.error;
-  if (annotationsQuery.error) throw annotationsQuery.error;
-  if (commentsQuery.error) throw commentsQuery.error;
+  if (versionsQuery.error) throw new Error(toUserErrorMessage(versionsQuery.error));
+  if (annotationsQuery.error) throw new Error(toUserErrorMessage(annotationsQuery.error));
+  if (commentsQuery.error) throw new Error(toUserErrorMessage(commentsQuery.error));
 
   return {
     versions: (versionsQuery.data ?? []) as AssetVersion[],
@@ -123,7 +166,7 @@ async function uploadImageToStorage(prompt: string, size: string, file?: File | 
     upsert: true
   });
 
-  if (error) throw error;
+  if (error) throw new Error(toUserErrorMessage(error));
 
   const { data } = supabase.storage.from("asset-images").getPublicUrl(filename);
   return data.publicUrl;
@@ -182,13 +225,15 @@ export async function generateAssetVersion(options: {
       .select("*")
       .single();
 
-    if (assetError || !createdAsset) throw assetError ?? new Error("Unable to create asset.");
+    if (assetError || !createdAsset) {
+      throw new Error(toUserErrorMessage(assetError ?? new Error("Unable to create asset.")));
+    }
 
     asset = createdAsset as Asset;
 
     const tags = inferTags(style, title).map((tag) => ({ asset_id: createdAsset.id, tag }));
     const { error: tagsError } = await supabase.from("asset_tags").insert(tags);
-    if (tagsError) throw tagsError;
+    if (tagsError) throw new Error(toUserErrorMessage(tagsError));
   }
 
   if (!asset) {
@@ -203,7 +248,7 @@ export async function generateAssetVersion(options: {
     .limit(1)
     .maybeSingle();
 
-  if (latestError) throw latestError;
+  if (latestError) throw new Error(toUserErrorMessage(latestError));
 
   const nextVersionNumber = safeVersionNumber(latestVersion?.version ?? "v0") + 1;
   const nextVersion = `v${nextVersionNumber}`;
@@ -218,7 +263,7 @@ export async function generateAssetVersion(options: {
     editor
   });
 
-  if (versionError) throw versionError;
+  if (versionError) throw new Error(toUserErrorMessage(versionError));
 
   const { error: updateError } = await supabase
     .from("assets")
@@ -231,7 +276,7 @@ export async function generateAssetVersion(options: {
     })
     .eq("id", asset.id);
 
-  if (updateError) throw updateError;
+  if (updateError) throw new Error(toUserErrorMessage(updateError));
 
   return asset.id;
 }
@@ -244,5 +289,5 @@ export async function addComment(assetId: string, author: string, content: strin
     content
   });
 
-  if (error) throw error;
+  if (error) throw new Error(toUserErrorMessage(error));
 }

@@ -79,6 +79,7 @@ npm run build
    - Framework preset: `Vite`
    - Build command: `npm run build`
    - Output directory: `dist`
+5. Redeploy after setting env vars (Vite injects `VITE_*` at build time).
 
 ### Option 2 (CLI preview)
 ```bash
@@ -88,3 +89,4 @@ npm run deploy:preview
 ## Notes
 - Asset image generation currently uses deterministic placeholder images and uploads them to Supabase Storage.
 - Real-time updates are wired with Supabase Realtime subscriptions for assets, versions, annotations, and comments.
+- If Vercel shows a blank page, verify `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` are set in Vercel, then trigger a new deployment.
