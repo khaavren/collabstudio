@@ -1,31 +1,30 @@
 {
   "name": "band-joes-studio",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint",
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "seed:demo": "node scripts/seed-demo.mjs",
     "deploy:preview": "bash scripts/deploy-vercel.sh"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.8",
-    "next": "14.2.25",
-    "react": "18.3.1",
-    "react-dom": "18.3.1"
+    "lucide-react": "^0.518.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^7.1.0"
   },
   "devDependencies": {
-    "@types/node": "^20.17.24",
+    "@tailwindcss/vite": "^4.1.11",
     "@types/react": "^18.3.20",
     "@types/react-dom": "^18.3.6",
-    "autoprefixer": "^10.4.21",
-    "eslint": "^8.57.1",
-    "eslint-config-next": "14.2.25",
-    "postcss": "^8.5.3",
-    "tailwindcss": "^3.4.17",
-    "typescript": "^5.8.2"
+    "@vitejs/plugin-react": "^4.4.1",
+    "tailwindcss": "^4.1.11",
+    "typescript": "^5.8.2",
+    "vite": "^5.4.12",
+    "vite-tsconfig-paths": "^5.1.4"
   }
 }

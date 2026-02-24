@@ -1,86 +1,61 @@
 # Band Joes Studio
 
-Notion-inspired collaborative web app for realtime product development around AI-generated concept images, with an admin account/infrastructure module.
+Band Joes Studio is a Notion-inspired collaborative product development app for concept images.
 
 ## Stack
-- Next.js App Router + TypeScript + Tailwind
-- Supabase (Auth, Postgres, Realtime, Storage)
-- Vercel deployment target
+- React 18 + TypeScript + Vite
+- React Router v7 (Data mode)
+- Tailwind CSS v4
+- lucide-react
+- Supabase (Postgres, Auth, Realtime, Storage)
+- Vercel deployment
 
-## Core App Features
-- Room list + creation (`/rooms`)
-- Notion-like asset board gallery (`/rooms/[roomId]`)
-- Persistent right-side inspector panel (version timeline, prompt history, preview, annotation pins, comments)
-- Realtime updates for assets, versions, comments
-- Generate flow:
-  - new asset if none selected
-  - new version if asset selected
-  - calls `POST /api/generate-image`
-  - uploads image to `bandjoes-assets` storage
-  - updates latest cover image
+## Routes
+- `/` redirects to `/room/hard-hat-system`
+- `/room/:roomId` main workspace
 
-## Admin Module (`/admin`)
-Protected by `ADMIN_EMAILS` and secure server routes.
-
-### Section 1 — Organization Profile
-- Manage organization identity and contact/address fields
-- Upload logo
-
-### Section 2 — Account & Team Settings
-- Team member list
-- Invite by email (Supabase admin invite)
-- Role assignment (`admin`, `editor`, `viewer`)
-- Remove member
-
-### Section 3 — Model API Configuration
-- Provider/model/default size/default params
-- Encrypted API key storage (AES-256-GCM)
-- Test connection action
-- Configured/Not Configured status
-
-### Section 4 — Usage & Limits (read-only)
-- Current month usage metrics display
-
-### Section 5 — Security & Environment
-- Supabase status
-- Storage bucket status
-- Model API configured status
-- Last settings update
-- App version
+## UI Structure
+- Left sidebar (240px): room navigation + new room + user block
+- Main area: room header, search/filter, generate CTA, asset grid
+- Right inspector (400px when selected):
+  - version timeline
+  - prompt history
+  - image preview with annotation pins
+  - comments thread
+- Generate modal for new assets/new versions
 
 ## Environment Variables
 Create `.env.local`:
 
 ```bash
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
-SETTINGS_ENCRYPTION_KEY=long_random_secret_for_aes
-ADMIN_EMAILS=admin1@company.com,admin2@company.com
+VITE_SUPABASE_URL=your_project_url
+VITE_SUPABASE_ANON_KEY=your_anon_key
 ```
 
-Notes:
-- `SUPABASE_SERVICE_ROLE_KEY` is server-only and used by protected admin APIs.
-- `SETTINGS_ENCRYPTION_KEY` encrypts/decrypts model API keys server-side only.
-- No API key secrets are returned to the browser.
+Vercel environment variables:
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
 
-## Supabase SQL Setup
-Run this SQL file in Supabase SQL editor:
+## Supabase Setup
+1. Create a Supabase project.
+2. Run SQL in order:
+   1. `supabase/schema.sql`
+   2. `supabase/seed.sql`
+3. In Supabase Storage, confirm bucket `asset-images` is public.
+4. Enable anonymous sign-in (Auth -> Providers -> Anonymous) if you want write actions without user login.
 
-- `supabase/schema.sql`
-
-It creates/updates:
-- `organizations`
-- `team_members`
+## Data Model
+Tables implemented in `supabase/schema.sql`:
 - `rooms`
 - `assets`
+- `asset_tags`
 - `asset_versions`
+- `annotations`
 - `comments`
-- `api_settings`
-- `usage_metrics`
-- RLS policies for organization scoping + role enforcement
-- Storage bucket/policies for `bandjoes-assets`
-- Realtime publication entries
+
+RLS setup:
+- Public read on all tables
+- Authenticated write on all tables
 
 ## Local Development
 ```bash
@@ -88,45 +63,28 @@ npm install
 npm run dev
 ```
 
-Routes:
-- `/` -> `/rooms`
-- `/rooms`
-- `/rooms/[roomId]`
-- `/admin`
-
-## Seed Demo Content
-Seeds two rooms and required sample assets/versions:
-- Band Joes Hard Hat Tri-Mount™
-- Band Joes Connect™ Cross Adapter Clip
-- Band Joes Grid System™ Starter Kit
-- Band Joes ShipCross™ Coffee Subscription
-
-Run:
+## Build
 ```bash
-npm run seed:demo
+npm run build
 ```
 
 ## Deploy to Vercel
+### Option 1 (UI)
 1. Push this repo to GitHub.
-2. Import the project in Vercel.
-3. Add all required environment variables in Vercel Project Settings:
-   - `NEXT_PUBLIC_SUPABASE_URL`
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-   - `SUPABASE_SERVICE_ROLE_KEY`
-   - `SETTINGS_ENCRYPTION_KEY`
-   - `ADMIN_EMAILS`
-4. Deploy.
+2. Import to Vercel.
+3. Set env vars:
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_ANON_KEY`
+4. Build settings:
+   - Framework preset: `Vite`
+   - Build command: `npm run build`
+   - Output directory: `dist`
 
-No `vercel.json` is required.
-
-Optional CLI preview deploy:
+### Option 2 (CLI preview)
 ```bash
 npm run deploy:preview
 ```
 
-## Validation Commands
-```bash
-npm run lint
-npm run typecheck
-npm run build
-```
+## Notes
+- Asset image generation currently uses deterministic placeholder images and uploads them to Supabase Storage.
+- Real-time updates are wired with Supabase Realtime subscriptions for assets, versions, annotations, and comments.

@@ -1,27 +1,9 @@
-# dependencies
 node_modules
-
-# next.js
+dist
+.vite
 .next
-out
-*.tsbuildinfo
-
-# production
-build
-
-# misc
+tsconfig.tsbuildinfo
 .DS_Store
-*.pem
-
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-
-# local env files
-.env*.local
-.env.local
-
-# vercel
-.vercel
+.env
+.env.*
+!.env.example
