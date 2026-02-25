@@ -1,13 +1,7 @@
-import {
-  ArrowRight,
-  FolderTree,
-  History,
-  MessageSquare,
-  Sparkles,
-  Users
-} from "lucide-react";
+import { ArrowRight, FolderTree, History, MessageSquare, Sparkles, Users } from "lucide-react";
 import type { ComponentType } from "react";
 import { Link } from "react-router-dom";
+import { SiteTopNav } from "@/components/SiteTopNav";
 
 type Feature = {
   title: string;
@@ -50,32 +44,7 @@ const features: Feature[] = [
 export function HomePage() {
   return (
     <div className="flex min-h-screen flex-col bg-[var(--background)] text-[var(--foreground)]">
-      <header className="border-b border-[var(--border)] bg-[var(--background)]/95">
-        <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-6">
-          <Link className="text-lg font-medium text-[var(--foreground)]" to="/">
-            MagisterLudi
-          </Link>
-
-          <nav className="flex items-center gap-5 text-sm">
-            <a className="text-[var(--muted-foreground)] transition hover:text-[var(--foreground)]" href="#features">
-              Features
-            </a>
-            <a className="text-[var(--muted-foreground)] transition hover:text-[var(--foreground)]" href="#about">
-              About
-            </a>
-            <Link className="text-[var(--muted-foreground)] transition hover:text-[var(--foreground)]" to="/login">
-              Login
-            </Link>
-            <Link
-              className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
-              to="/signup"
-            >
-              Get Started
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </nav>
-        </div>
-      </header>
+      <SiteTopNav />
 
       <main className="flex-1">
         <section className="mx-auto flex max-w-6xl flex-col items-center px-6 pb-16 pt-20 text-center md:pt-28">

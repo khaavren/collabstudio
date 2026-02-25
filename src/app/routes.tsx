@@ -7,6 +7,7 @@ import {
   useNavigate
 } from "react-router-dom";
 import { HomePage } from "@/app/pages/home";
+import { SiteTopNav } from "@/components/SiteTopNav";
 import { ensureAnonSession, supabase } from "@/lib/supabase";
 import { AdminPage } from "@/pages/AdminPage";
 import { ProfilePage } from "@/pages/ProfilePage";
@@ -20,20 +21,23 @@ function roomLoader({ params }: LoaderFunctionArgs) {
 
 function SignupPage() {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[var(--background)] px-6">
-      <div className="w-full max-w-lg rounded-xl border border-[var(--border)] bg-[var(--card)] p-6 text-center">
-        <h1 className="text-2xl font-medium text-[var(--foreground)]">Get Started with MagisterLudi</h1>
-        <p className="mt-2 text-sm leading-6 text-[var(--muted-foreground)]">
-          Enter the collaborative workspace and start building with your existing AI platform.
-        </p>
-        <Link
-          className="mt-5 inline-flex rounded-lg bg-[var(--primary)] px-5 py-2.5 text-sm font-medium text-white transition hover:opacity-90"
-          to="/room/hard-hat-system"
-        >
-          Open Workspace
-        </Link>
-      </div>
-    </main>
+    <div className="flex min-h-screen flex-col bg-[var(--background)]">
+      <SiteTopNav />
+      <main className="flex flex-1 items-center justify-center px-6">
+        <div className="w-full max-w-lg rounded-xl border border-[var(--border)] bg-[var(--card)] p-6 text-center">
+          <h1 className="text-2xl font-medium text-[var(--foreground)]">Get Started with MagisterLudi</h1>
+          <p className="mt-2 text-sm leading-6 text-[var(--muted-foreground)]">
+            Enter the collaborative workspace and start building with your existing AI platform.
+          </p>
+          <Link
+            className="mt-5 inline-flex rounded-lg bg-[var(--primary)] px-5 py-2.5 text-sm font-medium text-white transition hover:opacity-90"
+            to="/room/hard-hat-system"
+          >
+            Open Workspace
+          </Link>
+        </div>
+      </main>
+    </div>
   );
 }
 
@@ -137,60 +141,63 @@ function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[var(--background)] px-6">
-      <div className="w-full max-w-lg rounded-xl border border-[var(--border)] bg-[var(--card)] p-6">
-        <h1 className="text-2xl font-medium text-[var(--foreground)]">Login</h1>
+    <div className="flex min-h-screen flex-col bg-[var(--background)]">
+      <SiteTopNav />
+      <main className="flex flex-1 items-center justify-center px-6">
+        <div className="w-full max-w-lg rounded-xl border border-[var(--border)] bg-[var(--card)] p-6">
+          <h1 className="text-2xl font-medium text-[var(--foreground)]">Login</h1>
 
-        <p className="mt-2 text-sm leading-6 text-[var(--muted-foreground)]">
-          Sign in to your workspace with email magic link.
-        </p>
+          <p className="mt-2 text-sm leading-6 text-[var(--muted-foreground)]">
+            Sign in to your workspace with email magic link.
+          </p>
 
-        {error ? (
-          <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-            {error}
-          </div>
-        ) : null}
+          {error ? (
+            <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {error}
+            </div>
+          ) : null}
 
-        {message ? (
-          <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-            {message}
-          </div>
-        ) : null}
+          {message ? (
+            <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+              {message}
+            </div>
+          ) : null}
 
-        <form className="mt-4 space-y-3" onSubmit={handleSendMagicLink}>
-          <input
-            className="w-full rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--foreground)] outline-none"
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="name@company.com"
-            type="email"
-            value={email}
-          />
+          <form className="mt-4 space-y-3" onSubmit={handleSendMagicLink}>
+            <input
+              className="w-full rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--foreground)] outline-none"
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="name@company.com"
+              type="email"
+              value={email}
+            />
+            <button
+              className="inline-flex w-full items-center justify-center rounded-lg bg-[var(--primary)] px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-60"
+              disabled={isSending}
+              type="submit"
+            >
+              {isSending ? "Sending..." : "Send Magic Link"}
+            </button>
+          </form>
+
           <button
-            className="inline-flex w-full items-center justify-center rounded-lg bg-[var(--primary)] px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-60"
-            disabled={isSending}
-            type="submit"
+            className="mt-3 inline-flex w-full items-center justify-center rounded-lg border border-[var(--border)] px-4 py-2.5 text-sm font-medium text-[var(--foreground)] transition hover:bg-[var(--accent)] disabled:opacity-60"
+            disabled={isGuestLoading}
+            onClick={handleContinueAsGuest}
+            type="button"
           >
-            {isSending ? "Sending..." : "Send Magic Link"}
+            {isGuestLoading ? "Starting..." : "Continue as Guest"}
           </button>
-        </form>
 
-        <button
-          className="mt-3 inline-flex w-full items-center justify-center rounded-lg border border-[var(--border)] px-4 py-2.5 text-sm font-medium text-[var(--foreground)] transition hover:bg-[var(--accent)] disabled:opacity-60"
-          disabled={isGuestLoading}
-          onClick={handleContinueAsGuest}
-          type="button"
-        >
-          {isGuestLoading ? "Starting..." : "Continue as Guest"}
-        </button>
-
-        <div className="mt-4 border-t border-[var(--border)] pt-4 text-center text-sm text-[var(--muted-foreground)]">
-          Admin access?{" "}
-          <Link className="font-medium text-[var(--foreground)] hover:underline" to="/admin">
-            Go to Admin Sign In
-          </Link>
+          <div className="mt-4 border-t border-[var(--border)] pt-4 text-center text-sm text-[var(--muted-foreground)]">
+            Admin access?{" "}
+            <Link className="font-medium text-[var(--foreground)] hover:underline" to="/admin">
+              Go to Admin Sign In
+            </Link>
+          </div>
         </div>
-      </div>
-    </main>
+      </main>
+    </div>
   );
 }
 
