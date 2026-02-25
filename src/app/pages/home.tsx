@@ -26,7 +26,7 @@ const features: Feature[] = [
   },
   {
     title: "Organized Workflows",
-    description: "Workspaces, rooms, and assets keep complex projects structured and navigable.",
+    description: "Workspaces, rooms, and projects keep complex initiatives structured and navigable.",
     icon: FolderTree
   },
   {

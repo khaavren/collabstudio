@@ -413,7 +413,7 @@ export function AssetDetailView({
               <button
                 className="rounded-md p-1.5 text-[var(--muted-foreground)] transition-colors hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
                 onClick={() => setIsEditModalOpen(true)}
-                title="Edit asset details"
+                title="Edit project details"
                 type="button"
               >
                 <Pencil className="h-4 w-4" />

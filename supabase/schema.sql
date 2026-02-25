@@ -77,6 +77,62 @@ create index if not exists comments_asset_id_idx on comments(asset_id);
 create unique index if not exists asset_versions_unique_version_idx on asset_versions(asset_id, version);
 create unique index if not exists annotations_asset_number_idx on annotations(asset_id, number);
 
+-- Project domain views:
+-- Workspace items are "projects" in the product model.
+-- These views keep existing asset tables intact while exposing project-first naming.
+create or replace view projects as
+select
+  id,
+  room_id,
+  title,
+  description,
+  current_version,
+  image_url,
+  created_at,
+  updated_at,
+  edited_by
+from assets;
+
+create or replace view project_tags as
+select
+  id,
+  asset_id as project_id,
+  tag
+from asset_tags;
+
+create or replace view project_versions as
+select
+  id,
+  asset_id as project_id,
+  version,
+  prompt,
+  size,
+  style,
+  notes,
+  editor,
+  created_at
+from asset_versions;
+
+create or replace view project_annotations as
+select
+  id,
+  asset_id as project_id,
+  number,
+  x_position,
+  y_position,
+  created_at
+from annotations;
+
+create or replace view project_comments as
+select
+  id,
+  asset_id as project_id,
+  author,
+  avatar_url,
+  content,
+  created_at
+from comments;
+
 alter table rooms enable row level security;
 alter table assets enable row level security;
 alter table asset_tags enable row level security;

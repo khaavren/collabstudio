@@ -37,7 +37,7 @@ export function AssetCard({ asset, isSelected, onEdit, onSelect }: AssetCardProp
               event.stopPropagation();
               onEdit();
             }}
-            title="Edit asset"
+            title="Edit project"
             type="button"
           >
             <Pencil className="h-3.5 w-3.5" />

@@ -101,7 +101,7 @@ export function EditAssetModal({
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-[var(--border)] p-6">
-          <h2 className="text-lg font-medium text-[var(--foreground)]">Edit Asset Details</h2>
+          <h2 className="text-lg font-medium text-[var(--foreground)]">Edit Project Details</h2>
           <button
             className="rounded-md p-1 text-[var(--muted-foreground)] transition-colors hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
             onClick={onClose}
@@ -113,12 +113,12 @@ export function EditAssetModal({
 
         <form className="space-y-6 p-6" onSubmit={handleSubmit}>
           <div className="space-y-2">
-            <label className="text-sm font-medium text-[var(--foreground)]">Asset Title</label>
+            <label className="text-sm font-medium text-[var(--foreground)]">Project Title</label>
             <input
               autoFocus
               className="w-full rounded-lg border border-[var(--border)] bg-[color-mix(in_srgb,var(--accent)_60%,white)] px-3 py-2 text-sm text-[var(--foreground)] outline-none focus:ring-2 focus:ring-[color-mix(in_srgb,var(--primary)_50%,white)]"
               onChange={(event) => setTitle(event.target.value)}
-              placeholder="Enter asset title..."
+              placeholder="Enter project title..."
               value={title}
             />
           </div>
@@ -128,7 +128,7 @@ export function EditAssetModal({
             <textarea
               className="w-full resize-none rounded-lg border border-[var(--border)] bg-[color-mix(in_srgb,var(--accent)_60%,white)] px-3 py-2 text-sm text-[var(--foreground)] outline-none focus:ring-2 focus:ring-[color-mix(in_srgb,var(--primary)_50%,white)]"
               onChange={(event) => setDescription(event.target.value)}
-              placeholder="Brief description of this asset..."
+              placeholder="Brief description of this project..."
               rows={3}
               value={description}
             />
@@ -192,7 +192,7 @@ export function EditAssetModal({
                 onClick={onDelete}
                 type="button"
               >
-                Delete Asset
+                Delete Project
               </button>
             ) : null}
             <button

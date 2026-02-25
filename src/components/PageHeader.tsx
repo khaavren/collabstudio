@@ -2,7 +2,7 @@ import { Search } from "lucide-react";
 import type { AssetFilter } from "@/lib/types";
 
 type PageHeaderProps = {
-  assetCount: number;
+  projectCount: number;
   filter: AssetFilter;
   onFilterChange: (value: AssetFilter) => void;
   onGenerate: () => void;
@@ -12,7 +12,7 @@ type PageHeaderProps = {
 };
 
 export function PageHeader({
-  assetCount,
+  projectCount,
   filter,
   onFilterChange,
   onGenerate,
@@ -24,7 +24,7 @@ export function PageHeader({
     <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--card)] px-6 py-4">
       <div>
         <h2 className="text-lg font-medium text-[var(--foreground)]">{roomTitle}</h2>
-        <p className="text-sm text-[var(--muted-foreground)]">{assetCount} assets · 3 collaborators</p>
+        <p className="text-sm text-[var(--muted-foreground)]">{projectCount} projects · 3 collaborators</p>
       </div>
 
       <div className="flex flex-1 items-center justify-end gap-2 max-sm:w-full max-sm:flex-wrap max-sm:justify-start">
@@ -33,7 +33,7 @@ export function PageHeader({
           <input
             className="w-full rounded-lg border border-[var(--border)] bg-[var(--background)] py-2 pl-9 pr-3 text-sm text-[var(--foreground)] outline-none transition focus:border-[#D2D0CB]"
             onChange={(event) => onSearchChange(event.target.value)}
-            placeholder="Search assets"
+            placeholder="Search projects"
             value={searchValue}
           />
         </label>

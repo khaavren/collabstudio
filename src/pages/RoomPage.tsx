@@ -147,7 +147,7 @@ export function RoomPage() {
         setSelectedAssetId(null);
       }
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : "Unable to load assets.");
+      setError(caughtError instanceof Error ? caughtError.message : "Unable to load projects.");
     }
   }, [activeRoom, selectedAssetId]);
 
@@ -390,14 +390,14 @@ export function RoomPage() {
       return true;
     } catch (caughtError) {
       setAssets(previousAssets);
-      setError(caughtError instanceof Error ? caughtError.message : "Unable to update asset.");
+      setError(caughtError instanceof Error ? caughtError.message : "Unable to update project.");
       return false;
     }
   }
 
   async function handleDeleteAsset(assetId: string) {
     const targetAsset = assets.find((asset) => asset.id === assetId);
-    const label = targetAsset?.title ?? "this asset";
+    const label = targetAsset?.title ?? "this project";
     const confirmed = window.confirm(`Delete "${label}"? This action cannot be undone.`);
     if (!confirmed) {
       return false;
@@ -425,7 +425,7 @@ export function RoomPage() {
       if (wasSelected) {
         setSelectedAssetId(assetId);
       }
-      setError(caughtError instanceof Error ? caughtError.message : "Unable to delete asset.");
+      setError(caughtError instanceof Error ? caughtError.message : "Unable to delete project.");
       return false;
     }
   }
@@ -504,7 +504,7 @@ export function RoomPage() {
         ) : (
           <>
             <PageHeader
-              assetCount={filteredAssets.length}
+              projectCount={filteredAssets.length}
               filter={filter}
               onFilterChange={setFilter}
               onGenerate={() => {

@@ -64,7 +64,7 @@ export function GenerateModal({
 
         <form className="space-y-4" onSubmit={handleSubmit}>
           <label className="block text-sm text-[var(--foreground)]">
-            Asset title
+            Project title
             <input
               className="mt-1 w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm outline-none"
               onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
