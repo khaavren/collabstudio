@@ -1,6 +1,8 @@
 import { ArrowRight, FolderTree, History, MessageSquare, Sparkles, Users } from "lucide-react";
 import type { ComponentType } from "react";
 import { Link } from "react-router-dom";
+import { useAuth } from "@/app/context/auth-context";
+import { Dashboard } from "@/app/pages/dashboard";
 import { SiteTopNav } from "@/components/SiteTopNav";
 
 type Feature = {
@@ -42,6 +44,12 @@ const features: Feature[] = [
 ];
 
 export function HomePage() {
+  const { isAuthenticated } = useAuth();
+
+  if (isAuthenticated) {
+    return <Dashboard />;
+  }
+
   return (
     <div className="flex min-h-screen flex-col bg-[var(--background)] text-[var(--foreground)]">
       <SiteTopNav />
