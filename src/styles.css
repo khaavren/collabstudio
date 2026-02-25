@@ -1,15 +1,5 @@
 @import "tailwindcss";
-
-:root {
-  --background: #f7f7f5;
-  --foreground: #37352f;
-  --card: #ffffff;
-  --muted: #e9e8e5;
-  --muted-foreground: #787774;
-  --accent: #f3f2ef;
-  --primary: #d97706;
-  --border: rgba(55, 53, 47, 0.09);
-}
+@import "./styles/theme.css";
 
 * {
   box-sizing: border-box;
