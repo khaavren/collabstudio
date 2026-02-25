@@ -580,6 +580,13 @@ export function AdminPage() {
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="border-b border-slate-300/60 bg-white px-8 py-5">
             <h1 className="text-4xl font-semibold text-[#243042]">Admin Dashboard</h1>
+            <p className="mt-1 text-sm text-slate-500">
+              Studio administration only. Personal account details are managed in{" "}
+              <Link className="font-medium text-slate-700 underline" to="/settings/profile">
+                Profile Settings
+              </Link>
+              .
+            </p>
           </header>
 
           <nav className="border-b border-slate-300/60 bg-[#f5f7fb] px-8">

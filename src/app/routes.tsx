@@ -9,6 +9,7 @@ import {
 import { HomePage } from "@/app/pages/home";
 import { ensureAnonSession, supabase } from "@/lib/supabase";
 import { AdminPage } from "@/pages/AdminPage";
+import { ProfilePage } from "@/pages/ProfilePage";
 import { RoomPage } from "@/pages/RoomPage";
 
 function roomLoader({ params }: LoaderFunctionArgs) {
@@ -222,6 +223,10 @@ const router = createBrowserRouter([
   {
     path: "/admin",
     element: <AdminPage />
+  },
+  {
+    path: "/settings/profile",
+    element: <ProfilePage />
   },
   {
     path: "*",
