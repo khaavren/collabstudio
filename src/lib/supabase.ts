@@ -469,3 +469,20 @@ export async function updateAssetMetadata(options: {
     }
   }
 }
+
+export async function deleteAssetCascade(assetId: string) {
+  const deleteSteps: Array<PromiseLike<{ error: PostgrestError | null }>> = [
+    supabase.from("asset_tags").delete().eq("asset_id", assetId),
+    supabase.from("annotations").delete().eq("asset_id", assetId),
+    supabase.from("comments").delete().eq("asset_id", assetId),
+    supabase.from("asset_versions").delete().eq("asset_id", assetId),
+    supabase.from("assets").delete().eq("id", assetId)
+  ];
+
+  for (const step of deleteSteps) {
+    const { error } = await step;
+    if (error) {
+      throw new Error(toUserErrorMessage(error));
+    }
+  }
+}

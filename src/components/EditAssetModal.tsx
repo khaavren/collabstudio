@@ -7,6 +7,7 @@ type EditAssetModalProps = {
   assetTags: string[];
   assetTitle: string;
   onClose: () => void;
+  onDelete?: () => void;
   onSave: (data: {
     title: string;
     tags: string[];
@@ -24,6 +25,7 @@ export function EditAssetModal({
   assetTitle,
   isOpen,
   onClose,
+  onDelete,
   onSave
 }: EditAssetModalProps) {
   const [title, setTitle] = useState(assetTitle);
@@ -184,6 +186,15 @@ export function EditAssetModal({
           </div>
 
           <div className="flex justify-end gap-3 border-t border-[var(--border)] pt-4">
+            {onDelete ? (
+              <button
+                className="mr-auto rounded-lg px-4 py-2 text-sm text-[#b42318] transition-colors hover:bg-[#fef3f2]"
+                onClick={onDelete}
+                type="button"
+              >
+                Delete Asset
+              </button>
+            ) : null}
             <button
               className="rounded-lg px-4 py-2 text-sm text-[var(--muted-foreground)] transition-colors hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
               onClick={onClose}

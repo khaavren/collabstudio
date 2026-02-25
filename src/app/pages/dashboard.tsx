@@ -135,6 +135,18 @@ export function Dashboard() {
     );
   }
 
+  function handleDeleteWorkspace() {
+    if (!editingWorkspace) return;
+
+    const confirmed = window.confirm(
+      `Delete workspace "${editingWorkspace.name}"? This action cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    setWorkspaces((current) => current.filter((workspace) => workspace.id !== editingWorkspace.id));
+    setEditingWorkspace(null);
+  }
+
   return (
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
       <header className="border-b border-[var(--border)] bg-[var(--card)]">
@@ -377,6 +389,7 @@ export function Dashboard() {
       <EditWorkspaceModal
         isOpen={editingWorkspace !== null}
         onClose={() => setEditingWorkspace(null)}
+        onDelete={handleDeleteWorkspace}
         onSave={handleSaveWorkspace}
         workspaceDescription={editingWorkspace?.description ?? ""}
         workspaceName={editingWorkspace?.name ?? ""}

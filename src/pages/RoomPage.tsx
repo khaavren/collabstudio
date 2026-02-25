@@ -11,6 +11,7 @@ import {
   addComment,
   type ActorProfile,
   createRoom,
+  deleteAssetCascade,
   ensureAnonSession,
   fetchAssetDetails,
   fetchAssetsForRoom,
@@ -394,6 +395,41 @@ export function RoomPage() {
     }
   }
 
+  async function handleDeleteAsset(assetId: string) {
+    const targetAsset = assets.find((asset) => asset.id === assetId);
+    const label = targetAsset?.title ?? "this asset";
+    const confirmed = window.confirm(`Delete "${label}"? This action cannot be undone.`);
+    if (!confirmed) {
+      return false;
+    }
+
+    const previousAssets = assets;
+    const wasSelected = selectedAssetId === assetId;
+
+    setAssets((current) => current.filter((asset) => asset.id !== assetId));
+    if (wasSelected) {
+      setSelectedAssetId(null);
+      setActiveVersionId(null);
+      setVersions([]);
+      setAnnotations([]);
+      setComments([]);
+    }
+
+    try {
+      await deleteAssetCascade(assetId);
+      await loadAssetsData();
+      setError(null);
+      return true;
+    } catch (caughtError) {
+      setAssets(previousAssets);
+      if (wasSelected) {
+        setSelectedAssetId(assetId);
+      }
+      setError(caughtError instanceof Error ? caughtError.message : "Unable to delete asset.");
+      return false;
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center text-sm text-[var(--muted-foreground)]">
@@ -433,6 +469,7 @@ export function RoomPage() {
             asset={selectedAsset}
             comments={comments}
             onAddComment={handleAddComment}
+            onAssetDelete={handleDeleteAsset}
             onAssetUpdate={handleAssetUpdate}
             onBack={() => {
               setSelectedAssetId(null);
@@ -521,6 +558,14 @@ export function RoomPage() {
         assetTitle={editingGridAsset?.title ?? ""}
         isOpen={editingGridAsset !== null}
         onClose={() => setEditingGridAsset(null)}
+        onDelete={() => {
+          if (!editingGridAsset) return;
+          void handleDeleteAsset(editingGridAsset.id).then((ok) => {
+            if (ok) {
+              setEditingGridAsset(null);
+            }
+          });
+        }}
         onSave={(data) => {
           if (!editingGridAsset) return;
           void handleAssetUpdate({

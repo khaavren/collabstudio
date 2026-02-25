@@ -27,6 +27,7 @@ type AssetDetailViewProps = {
     tags: string[];
     description: string;
   }) => Promise<boolean>;
+  onAssetDelete: (assetId: string) => Promise<boolean>;
   onCreateVariant: (version: AssetVersion) => void;
   onRegenerate: (version: AssetVersion) => void;
   onSelectVersion: (versionId: string) => void;
@@ -272,6 +273,7 @@ export function AssetDetailView({
   comments,
   onAddComment,
   onBack,
+  onAssetDelete,
   onAssetUpdate,
   onCreateVariant,
   onRegenerate,
@@ -373,6 +375,14 @@ export function AssetDetailView({
     });
     if (ok) {
       setIsEditModalOpen(false);
+    }
+  }
+
+  async function handleDeleteAsset() {
+    const ok = await onAssetDelete(asset.id);
+    if (ok) {
+      setIsEditModalOpen(false);
+      onBack();
     }
   }
 
@@ -505,6 +515,9 @@ export function AssetDetailView({
         assetTitle={asset.title}
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
+        onDelete={() => {
+          void handleDeleteAsset();
+        }}
         onSave={(data) => {
           void handleSaveAsset(data);
         }}

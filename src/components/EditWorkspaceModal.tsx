@@ -6,6 +6,7 @@ type EditWorkspaceModalProps = {
   workspaceName: string;
   workspaceDescription: string;
   onClose: () => void;
+  onDelete: () => void;
   onSave: (next: { name: string; description: string }) => void;
 };
 
@@ -13,6 +14,7 @@ export function EditWorkspaceModal({
   isOpen,
   workspaceName,
   workspaceDescription,
+  onDelete,
   onClose,
   onSave
 }: EditWorkspaceModalProps) {
@@ -81,6 +83,13 @@ export function EditWorkspaceModal({
           </label>
 
           <div className="flex justify-end gap-2 pt-2">
+            <button
+              className="mr-auto rounded-lg px-3 py-2 text-sm text-[#b42318] transition hover:bg-[#fef3f2]"
+              onClick={onDelete}
+              type="button"
+            >
+              Delete Workspace
+            </button>
             <button
               className="rounded-lg px-3 py-2 text-sm text-[var(--muted-foreground)] transition hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
               onClick={onClose}
