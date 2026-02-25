@@ -99,29 +99,26 @@ export function HomePage() {
         </section>
       </main>
 
-      <footer className="mt-auto border-t border-[var(--border)] bg-[var(--card)]" id="about">
-        <div className="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-7 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-lg font-medium text-[var(--foreground)]">MagisterLudi</p>
-            <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-              Collaboration layer for AI-powered product development.
-            </p>
+      <footer className="mt-auto border-t border-[var(--border)] bg-[var(--background)]" id="about">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-5">
+          <div className="flex items-center gap-3 text-sm text-[var(--muted-foreground)]">
+            <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-[var(--primary)] text-white">
+              <Sparkles className="h-3.5 w-3.5" />
+            </span>
+            <span>© {new Date().getFullYear()} MagisterLudi. All rights reserved.</span>
           </div>
 
-          <nav className="flex items-center gap-5 text-sm">
-            <a className="text-[var(--muted-foreground)] transition hover:text-[var(--foreground)]" href="#features">
-              Features
+          <nav className="flex items-center gap-5 text-sm text-[var(--muted-foreground)]">
+            <a className="transition hover:text-[var(--foreground)]" href="#">
+              Privacy
             </a>
-            <a className="text-[var(--muted-foreground)] transition hover:text-[var(--foreground)]" href="#about">
-              About
+            <a className="transition hover:text-[var(--foreground)]" href="#">
+              Terms
             </a>
-            <Link className="text-[var(--muted-foreground)] transition hover:text-[var(--foreground)]" to="/login">
-              Login
-            </Link>
+            <a className="transition hover:text-[var(--foreground)]" href="#">
+              Contact
+            </a>
           </nav>
-        </div>
-        <div className="border-t border-[var(--border)] px-6 py-4 text-center text-xs text-[var(--muted-foreground)]">
-          © {new Date().getFullYear()} MagisterLudi. All rights reserved.
         </div>
       </footer>
     </div>
