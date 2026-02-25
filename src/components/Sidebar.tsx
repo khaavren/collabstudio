@@ -1,4 +1,4 @@
-import { Grid2x2, LogOut, Pencil, Plus } from "lucide-react";
+import { ArrowLeft, Grid2x2, LogOut, Pencil, Plus } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/app/context/auth-context";
@@ -53,7 +53,16 @@ export function Sidebar({
     <>
       <aside className="flex h-full w-[240px] flex-col border-r border-[var(--border)] bg-[#FBFBFA]">
         <div className="border-b border-[var(--border)] px-5 py-4">
-          <h1 className="text-base font-medium text-[var(--foreground)]">{workspaceName}</h1>
+          <div className="flex items-center gap-2">
+            <Link
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--muted-foreground)] transition hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
+              title="Back to workspaces"
+              to="/"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
+            <h1 className="truncate text-base font-medium text-[var(--foreground)]">{workspaceName}</h1>
+          </div>
         </div>
 
         <nav className="flex-1 space-y-1 p-3">
