@@ -31,7 +31,7 @@ export function AssetCard({ asset, isSelected, onEdit, onSelect }: AssetCardProp
 
         {onEdit ? (
           <button
-            className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-md bg-white/95 text-[var(--foreground)] shadow-sm transition hover:bg-white"
+            className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-md bg-white/95 text-[var(--foreground)] opacity-0 shadow-sm transition hover:bg-white group-hover:opacity-100 group-focus-within:opacity-100"
             onClick={(event) => {
               event.preventDefault();
               event.stopPropagation();
