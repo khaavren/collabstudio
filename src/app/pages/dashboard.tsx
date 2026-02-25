@@ -277,15 +277,15 @@ export function Dashboard() {
           </div>
         </section>
 
-        {sharedWorkspaces.length > 0 ? (
-          <section>
-            <div className="mb-4">
-              <h2 className="text-4xl font-semibold tracking-tight">Shared Workspaces</h2>
-              <p className="mt-1 text-lg text-[var(--muted-foreground)]">
-                Workspaces shared with you by other team members
-              </p>
-            </div>
+        <section>
+          <div className="mb-4">
+            <h2 className="text-4xl font-semibold tracking-tight">Shared Workspaces</h2>
+            <p className="mt-1 text-lg text-[var(--muted-foreground)]">
+              Workspaces shared with you by other team members
+            </p>
+          </div>
 
+          {sharedWorkspaces.length > 0 ? (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
               {sharedWorkspaces.map((workspace) => (
                 <Link
@@ -318,8 +318,12 @@ export function Dashboard() {
                 </Link>
               ))}
             </div>
-          </section>
-        ) : null}
+          ) : (
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5 text-[var(--muted-foreground)]">
+              No shared workspaces have been shared with you.
+            </div>
+          )}
+        </section>
 
         <section>
           <div className="mb-4 flex items-end justify-between gap-3">

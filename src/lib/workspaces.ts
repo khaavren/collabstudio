@@ -34,28 +34,6 @@ const DEFAULT_WORKSPACES: WorkspaceRecord[] = [
     color: "#2563eb",
     owner: "1",
     ownerName: "John Doe"
-  },
-  {
-    id: "3",
-    name: "Marketing Campaign",
-    description: "Q2 marketing materials and assets",
-    roomCount: 3,
-    lastAccessed: "3 days ago",
-    collaborators: 4,
-    color: "#9333ea",
-    owner: "2",
-    ownerName: "Jane Smith"
-  },
-  {
-    id: "4",
-    name: "Design System",
-    description: "Company-wide design components",
-    roomCount: 5,
-    lastAccessed: "4 days ago",
-    collaborators: 8,
-    color: "#16a34a",
-    owner: "3",
-    ownerName: "Mike Johnson"
   }
 ];
 
@@ -81,6 +59,19 @@ function sanitizeWorkspace(raw: unknown): WorkspaceRecord | null {
   };
 }
 
+function removeLegacySharedPlaceholders(workspaces: WorkspaceRecord[]) {
+  return workspaces.filter((workspace) => {
+    const isLegacyMarketing =
+      workspace.id === "3" &&
+      workspace.name === "Marketing Campaign" &&
+      workspace.ownerName === "Jane Smith";
+    const isLegacyDesignSystem =
+      workspace.id === "4" && workspace.name === "Design System" && workspace.ownerName === "Mike Johnson";
+
+    return !isLegacyMarketing && !isLegacyDesignSystem;
+  });
+}
+
 export function getDefaultWorkspaces() {
   return [...DEFAULT_WORKSPACES];
 }
@@ -101,7 +92,8 @@ export function loadWorkspaces() {
       .map((entry) => sanitizeWorkspace(entry))
       .filter((entry): entry is WorkspaceRecord => entry !== null);
 
-    return next.length > 0 ? next : getDefaultWorkspaces();
+    const migrated = removeLegacySharedPlaceholders(next);
+    return migrated.length > 0 ? migrated : getDefaultWorkspaces();
   } catch {
     return getDefaultWorkspaces();
   }
