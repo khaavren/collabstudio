@@ -2,6 +2,7 @@ import { Search } from "lucide-react";
 import type { AssetFilter } from "@/lib/types";
 
 type PageHeaderProps = {
+  collaboratorCount: number;
   projectCount: number;
   filter: AssetFilter;
   onFilterChange: (value: AssetFilter) => void;
@@ -12,6 +13,7 @@ type PageHeaderProps = {
 };
 
 export function PageHeader({
+  collaboratorCount,
   projectCount,
   filter,
   onFilterChange,
@@ -24,7 +26,9 @@ export function PageHeader({
     <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--card)] px-6 py-4">
       <div>
         <h2 className="text-lg font-medium text-[var(--foreground)]">{roomTitle}</h2>
-        <p className="text-sm text-[var(--muted-foreground)]">{projectCount} projects · 3 collaborators</p>
+        <p className="text-sm text-[var(--muted-foreground)]">
+          {projectCount} projects · {collaboratorCount} collaborators
+        </p>
       </div>
 
       <div className="flex flex-1 items-center justify-end gap-2 max-sm:w-full max-sm:flex-wrap max-sm:justify-start">

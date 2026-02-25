@@ -102,6 +102,15 @@ export function RoomPage() {
     });
   }, [assets, filter, search]);
 
+  const collaboratorCount = useMemo(() => {
+    const names = new Set(
+      assets
+        .map((asset) => asset.edited_by?.trim())
+        .filter((value): value is string => Boolean(value))
+    );
+    return names.size;
+  }, [assets]);
+
   const loadRoomsData = useCallback(async () => {
     setIsLoading(true);
 
@@ -504,6 +513,7 @@ export function RoomPage() {
         ) : (
           <>
             <PageHeader
+              collaboratorCount={collaboratorCount}
               projectCount={filteredAssets.length}
               filter={filter}
               onFilterChange={setFilter}
