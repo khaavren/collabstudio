@@ -2,12 +2,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Image as ImageIcon,
+  Pencil,
   RotateCw,
   Send,
   Sparkles,
   X
 } from "lucide-react";
 import { CommentThread } from "@/components/CommentThread";
+import { EditAssetModal } from "@/components/EditAssetModal";
 import { TagChip } from "@/components/TagChip";
 import { placeholderUrl, timeAgo } from "@/lib/utils";
 import type { Annotation, AssetVersion, AssetWithTags, Comment } from "@/lib/types";
@@ -19,6 +21,12 @@ type AssetDetailViewProps = {
   comments: Comment[];
   onAddComment: (content: string) => Promise<void>;
   onBack: () => void;
+  onAssetUpdate: (updated: {
+    id: string;
+    title: string;
+    tags: string[];
+    description: string;
+  }) => Promise<void>;
   onCreateVariant: (version: AssetVersion) => void;
   onRegenerate: (version: AssetVersion) => void;
   onSelectVersion: (versionId: string) => void;
@@ -264,6 +272,7 @@ export function AssetDetailView({
   comments,
   onAddComment,
   onBack,
+  onAssetUpdate,
   onCreateVariant,
   onRegenerate,
   onSelectVersion,
@@ -273,6 +282,7 @@ export function AssetDetailView({
   const [promptInput, setPromptInput] = useState("");
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isSendingPrompt, setIsSendingPrompt] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   const conversationBottomRef = useRef<HTMLDivElement>(null);
   const generationRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -350,6 +360,20 @@ export function AssetDetailView({
     }
   }
 
+  async function handleSaveAsset(data: {
+    title: string;
+    tags: string[];
+    description: string;
+  }) {
+    await onAssetUpdate({
+      id: asset.id,
+      title: data.title,
+      tags: data.tags,
+      description: data.description
+    });
+    setIsEditModalOpen(false);
+  }
+
   function scrollToVersion(versionId: string) {
     onSelectVersion(versionId);
     generationRefs.current[versionId]?.scrollIntoView({
@@ -372,12 +396,27 @@ export function AssetDetailView({
           </button>
 
           <div className="min-w-0">
-            <h2 className="truncate text-base font-medium text-[var(--foreground)]">{asset.title}</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="truncate text-base font-medium text-[var(--foreground)]">{asset.title}</h2>
+              <button
+                className="rounded-md p-1.5 text-[var(--muted-foreground)] transition-colors hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
+                onClick={() => setIsEditModalOpen(true)}
+                title="Edit asset details"
+                type="button"
+              >
+                <Pencil className="h-4 w-4" />
+              </button>
+            </div>
             <div className="mt-1 flex flex-wrap gap-1.5">
               {asset.tags.map((tag) => (
                 <TagChip key={`${asset.id}-detail-${tag}`}>{tag}</TagChip>
               ))}
             </div>
+            {asset.description ? (
+              <p className="mt-2 line-clamp-2 text-sm text-[var(--muted-foreground)]">
+                {asset.description}
+              </p>
+            ) : null}
           </div>
         </div>
 
@@ -457,6 +496,17 @@ export function AssetDetailView({
       </div>
 
       {selectedImage ? <ImageLightbox imageUrl={selectedImage} onClose={() => setSelectedImage(null)} /> : null}
+
+      <EditAssetModal
+        assetDescription={asset.description}
+        assetTags={asset.tags}
+        assetTitle={asset.title}
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        onSave={(data) => {
+          void handleSaveAsset(data);
+        }}
+      />
     </div>
   );
 }

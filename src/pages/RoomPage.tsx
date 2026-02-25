@@ -15,7 +15,8 @@ import {
   fetchRooms,
   generateAssetVersion,
   isSupabaseConfigured,
-  supabase
+  supabase,
+  updateAssetMetadata
 } from "@/lib/supabase";
 import { slugify } from "@/lib/utils";
 import type {
@@ -74,7 +75,7 @@ export function RoomPage() {
 
   const filteredAssets = useMemo(() => {
     return assets.filter((asset) => {
-      const haystack = `${asset.title} ${asset.tags.join(" ")}`.toLowerCase();
+      const haystack = `${asset.title} ${asset.description ?? ""} ${asset.tags.join(" ")}`.toLowerCase();
       const searchMatch = haystack.includes(search.toLowerCase());
 
       if (!searchMatch) return false;
@@ -303,6 +304,45 @@ export function RoomPage() {
     });
   }
 
+  async function handleAssetUpdate(updatedAsset: {
+    id: string;
+    title: string;
+    tags: string[];
+    description: string;
+  }) {
+    const previousAssets = assets;
+
+    setAssets((current) =>
+      current.map((asset) =>
+        asset.id === updatedAsset.id
+          ? {
+              ...asset,
+              title: updatedAsset.title,
+              tags: updatedAsset.tags,
+              description: updatedAsset.description || null,
+              edited_by: "Phil",
+              updated_at: new Date().toISOString()
+            }
+          : asset
+      )
+    );
+
+    try {
+      await updateAssetMetadata({
+        assetId: updatedAsset.id,
+        title: updatedAsset.title,
+        tags: updatedAsset.tags,
+        description: updatedAsset.description,
+        editedBy: "Phil"
+      });
+      await loadAssetsData();
+      setError(null);
+    } catch (caughtError) {
+      setAssets(previousAssets);
+      setError(caughtError instanceof Error ? caughtError.message : "Unable to update asset.");
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center text-sm text-[var(--muted-foreground)]">
@@ -334,6 +374,7 @@ export function RoomPage() {
             asset={selectedAsset}
             comments={comments}
             onAddComment={handleAddComment}
+            onAssetUpdate={handleAssetUpdate}
             onBack={() => {
               setSelectedAssetId(null);
               setActiveVersionId(null);

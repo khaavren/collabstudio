@@ -22,12 +22,15 @@ create table if not exists assets (
   id uuid primary key default gen_random_uuid(),
   room_id uuid not null references rooms(id) on delete cascade,
   title text not null,
+  description text,
   current_version text not null,
   image_url text not null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   edited_by text not null
 );
+
+alter table assets add column if not exists description text;
 
 create table if not exists asset_tags (
   id uuid primary key default gen_random_uuid(),

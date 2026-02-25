@@ -319,3 +319,60 @@ export async function addComment(assetId: string, author: string, content: strin
 
   if (error) throw new Error(toUserErrorMessage(error));
 }
+
+function normalizeTags(tags: string[]) {
+  const seen = new Set<string>();
+  const output: string[] = [];
+
+  for (const tag of tags) {
+    const cleaned = tag.trim().replace(/^#+/, "");
+    if (!cleaned) continue;
+
+    const key = cleaned.toLowerCase();
+    if (seen.has(key)) continue;
+
+    seen.add(key);
+    output.push(cleaned);
+  }
+
+  return output.slice(0, 10);
+}
+
+export async function updateAssetMetadata(options: {
+  assetId: string;
+  title: string;
+  description: string;
+  tags: string[];
+  editedBy: string;
+}) {
+  const { assetId, description, editedBy, title } = options;
+  const tags = normalizeTags(options.tags);
+
+  const { error: assetError } = await supabase
+    .from("assets")
+    .update({
+      title: title.trim(),
+      description: description.trim() || null,
+      edited_by: editedBy,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", assetId);
+
+  if (assetError) {
+    throw new Error(toUserErrorMessage(assetError));
+  }
+
+  const { error: deleteTagsError } = await supabase.from("asset_tags").delete().eq("asset_id", assetId);
+  if (deleteTagsError) {
+    throw new Error(toUserErrorMessage(deleteTagsError));
+  }
+
+  if (tags.length > 0) {
+    const { error: insertTagsError } = await supabase
+      .from("asset_tags")
+      .insert(tags.map((tag) => ({ asset_id: assetId, tag })));
+    if (insertTagsError) {
+      throw new Error(toUserErrorMessage(insertTagsError));
+    }
+  }
+}

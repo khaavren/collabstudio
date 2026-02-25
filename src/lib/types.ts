@@ -10,6 +10,7 @@ export type Asset = {
   id: string;
   room_id: string;
   title: string;
+  description: string | null;
   current_version: string;
   image_url: string;
   created_at: string;
