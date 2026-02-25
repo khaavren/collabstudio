@@ -129,7 +129,7 @@ export function Dashboard() {
 
   const stats = [
     {
-      label: "Total Workspaces",
+      label: "Workspaces",
       value: workspaces.length,
       icon: FolderTree
     },
@@ -171,7 +171,7 @@ export function Dashboard() {
   return (
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
       <header className="border-b border-[var(--border)] bg-[var(--card)]">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3">
+        <div className="flex items-center justify-between px-6 py-3">
           <div className="flex items-center gap-3">
             <div className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--primary)] text-white">
               <Sparkles className="h-5 w-5" />
@@ -197,7 +197,7 @@ export function Dashboard() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl space-y-10 px-6 py-10">
+      <main className="space-y-10 px-6 py-10">
         <section>
           <h1 className="text-5xl font-semibold tracking-tight">Welcome back, {firstName}</h1>
           <p className="mt-2 text-2xl text-[var(--muted-foreground)]">
