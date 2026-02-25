@@ -4,6 +4,7 @@ import {
   RouterProvider,
   type LoaderFunctionArgs
 } from "react-router-dom";
+import { AdminPage } from "@/pages/AdminPage";
 import { RoomPage } from "@/pages/RoomPage";
 
 function rootRedirectLoader() {
@@ -33,6 +34,10 @@ const router = createBrowserRouter([
     path: "/room/:roomId",
     loader: roomLoader,
     element: <RoomPage />
+  },
+  {
+    path: "/admin",
+    element: <AdminPage />
   },
   {
     path: "*",

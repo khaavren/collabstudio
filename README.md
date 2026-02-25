@@ -1,61 +1,67 @@
 # Band Joes Studio
 
-Band Joes Studio is a Notion-inspired collaborative product development app for concept images.
+Band Joes Studio is a Notion-inspired collaborative product development app with Supabase-backed realtime collaboration and an admin control panel for organization and model settings.
 
 ## Stack
 - React 18 + TypeScript + Vite
-- React Router v7 (Data mode)
+- React Router v7
 - Tailwind CSS v4
-- lucide-react
-- Supabase (Postgres, Auth, Realtime, Storage)
-- Vercel deployment
+- Supabase (Auth, Postgres, Realtime, Storage)
+- Vercel (static frontend + serverless `/api/*`)
 
 ## Routes
-- `/` redirects to `/room/hard-hat-system`
-- `/room/:roomId` main workspace
-
-## UI Structure
-- Left sidebar (240px): room navigation + new room + user block
-- Main area: room header, search/filter, generate CTA, asset grid
-- Right inspector (400px when selected):
-  - version timeline
-  - prompt history
-  - image preview with annotation pins
-  - comments thread
-- Generate modal for new assets/new versions
+- `/` -> redirects to `/room/hard-hat-system`
+- `/room/:roomId` -> main collaborative board
+- `/admin` -> Account & Infrastructure Settings (protected by `ADMIN_EMAILS`)
 
 ## Environment Variables
-Create `.env.local`:
+Set these in `.env.local` for local dev and in Vercel Project Environment Variables:
 
 ```bash
-VITE_SUPABASE_URL=your_project_url
-VITE_SUPABASE_ANON_KEY=your_anon_key
+VITE_SUPABASE_URL=
+VITE_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+SETTINGS_ENCRYPTION_KEY=
+ADMIN_EMAILS=admin1@company.com,admin2@company.com
 ```
 
-Vercel environment variables:
-- `VITE_SUPABASE_URL`
-- `VITE_SUPABASE_ANON_KEY`
+Notes:
+- `VITE_*` values are safe for browser use and are required by the frontend.
+- `SUPABASE_SERVICE_ROLE_KEY` is server-only. It is used only in `/api/admin/*` routes.
+- `SETTINGS_ENCRYPTION_KEY` is used for AES-256-GCM encryption of model API keys.
+- `ADMIN_EMAILS` controls `/admin` access.
 
 ## Supabase Setup
-1. Create a Supabase project.
-2. Run SQL in order:
-   1. `supabase/schema.sql`
-   2. `supabase/seed.sql`
-3. In Supabase Storage, confirm bucket `asset-images` is public.
-4. Enable anonymous sign-in (Auth -> Providers -> Anonymous) if you want write actions without user login.
+1. Open Supabase Dashboard -> SQL Editor.
+2. Run `supabase/schema.sql`.
+3. Run `supabase/seed.sql`.
+4. In Auth -> Providers:
+   - Enable `Anonymous` (for quick board usage)
+   - Enable `Email` (for admin magic link sign-in)
+5. Ensure Storage buckets exist (created by schema):
+   - `asset-images` (board images)
+   - `bandjoes-assets` (admin branding/logo)
 
-## Data Model
-Tables implemented in `supabase/schema.sql`:
-- `rooms`
-- `assets`
-- `asset_tags`
-- `asset_versions`
-- `annotations`
-- `comments`
+## Admin Panel (`/admin`)
+The admin module includes:
+1. Organization Profile
+2. Account & Team Settings
+3. Model API Configuration
+4. Usage & Limits
+5. Security & Environment
 
-RLS setup:
-- Public read on all tables
-- Authenticated write on all tables
+API endpoints:
+- `GET/POST /api/admin/settings`
+- `GET /api/admin/me`
+- `POST /api/admin/team/invite`
+- `PATCH/DELETE /api/admin/team/:memberId`
+- `POST /api/admin/test`
+
+Security:
+- Admin APIs require bearer token from Supabase session.
+- Requests are authorized against `ADMIN_EMAILS`.
+- Model API key is encrypted at rest (AES-256-GCM).
+- Decrypted keys are never returned to the client.
 
 ## Local Development
 ```bash
@@ -63,30 +69,33 @@ npm install
 npm run dev
 ```
 
-## Build
+For full-stack local testing of `/api/*` routes, run:
+
 ```bash
+npx vercel dev
+```
+
+## Build / Typecheck
+```bash
+npm run typecheck
 npm run build
 ```
 
 ## Deploy to Vercel
-### Option 1 (UI)
-1. Push this repo to GitHub.
-2. Import to Vercel.
-3. Set env vars:
-   - `VITE_SUPABASE_URL`
-   - `VITE_SUPABASE_ANON_KEY`
-4. Build settings:
-   - Framework preset: `Vite`
-   - Build command: `npm run build`
-   - Output directory: `dist`
-5. Redeploy after setting env vars (Vite injects `VITE_*` at build time).
+1. Push repo to GitHub.
+2. Import project in Vercel.
+3. Framework preset: `Vite`.
+4. Build command: `npm run build`.
+5. Output directory: `dist`.
+6. Add all env vars listed above for `Production`, `Preview`, and `Development`.
+7. Redeploy after environment variable changes.
 
-### Option 2 (CLI preview)
-```bash
-npm run deploy:preview
-```
+`vercel.json` is configured to:
+- serve filesystem paths (including `/api/*`) first
+- fallback other routes to `index.html` for SPA routing.
 
-## Notes
-- Asset image generation currently uses deterministic placeholder images and uploads them to Supabase Storage.
-- Real-time updates are wired with Supabase Realtime subscriptions for assets, versions, annotations, and comments.
-- If Vercel shows a blank page, verify `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` are set in Vercel, then trigger a new deployment.
+## Placeholder Image Generation
+The board calls `POST /api/generate-image`.
+- If org model settings are configured, the route marks provider/model as configured.
+- For deployability, it still returns deterministic Picsum placeholders.
+- If not configured, it falls back to placeholder mode automatically.

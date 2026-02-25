@@ -220,3 +220,243 @@ begin
     execute 'alter publication supabase_realtime add table public.comments';
   end if;
 end $$;
+
+create table if not exists organizations (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  slug text not null unique,
+  website text,
+  contact_email text,
+  phone text,
+  address_line1 text,
+  address_line2 text,
+  city text,
+  state text,
+  postal_code text,
+  country text,
+  logo_storage_path text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists team_members (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references organizations(id) on delete cascade,
+  user_id uuid not null,
+  role text not null check (role in ('admin', 'editor', 'viewer')),
+  created_at timestamptz not null default now(),
+  unique (organization_id, user_id)
+);
+
+create table if not exists api_settings (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null unique references organizations(id) on delete cascade,
+  provider text,
+  model text,
+  default_image_size text,
+  default_params jsonb not null default '{}'::jsonb,
+  encrypted_api_key text,
+  updated_at timestamptz not null default now(),
+  updated_by uuid
+);
+
+create table if not exists usage_metrics (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references organizations(id) on delete cascade,
+  month text not null,
+  images_generated int not null default 0,
+  storage_used_mb numeric not null default 0,
+  api_calls int not null default 0,
+  unique (organization_id, month)
+);
+
+create index if not exists team_members_org_idx on team_members (organization_id);
+create index if not exists team_members_user_idx on team_members (user_id);
+create index if not exists usage_metrics_org_month_idx on usage_metrics (organization_id, month);
+
+drop trigger if exists organizations_set_updated_at on organizations;
+create trigger organizations_set_updated_at
+before update on organizations
+for each row
+execute function public.set_updated_at();
+
+drop trigger if exists api_settings_set_updated_at on api_settings;
+create trigger api_settings_set_updated_at
+before update on api_settings
+for each row
+execute function public.set_updated_at();
+
+alter table organizations enable row level security;
+alter table team_members enable row level security;
+alter table api_settings enable row level security;
+alter table usage_metrics enable row level security;
+
+drop policy if exists "organizations_select_member" on organizations;
+create policy "organizations_select_member"
+on organizations for select
+using (
+  exists (
+    select 1
+    from team_members tm
+    where tm.organization_id = organizations.id
+      and tm.user_id = auth.uid()
+  )
+);
+
+drop policy if exists "organizations_update_admin" on organizations;
+create policy "organizations_update_admin"
+on organizations for update
+using (
+  exists (
+    select 1
+    from team_members tm
+    where tm.organization_id = organizations.id
+      and tm.user_id = auth.uid()
+      and tm.role = 'admin'
+  )
+)
+with check (
+  exists (
+    select 1
+    from team_members tm
+    where tm.organization_id = organizations.id
+      and tm.user_id = auth.uid()
+      and tm.role = 'admin'
+  )
+);
+
+drop policy if exists "team_members_select_org_member" on team_members;
+create policy "team_members_select_org_member"
+on team_members for select
+using (
+  exists (
+    select 1
+    from team_members me
+    where me.organization_id = team_members.organization_id
+      and me.user_id = auth.uid()
+  )
+);
+
+drop policy if exists "team_members_insert_admin" on team_members;
+create policy "team_members_insert_admin"
+on team_members for insert
+with check (
+  exists (
+    select 1
+    from team_members me
+    where me.organization_id = team_members.organization_id
+      and me.user_id = auth.uid()
+      and me.role = 'admin'
+  )
+);
+
+drop policy if exists "team_members_update_admin" on team_members;
+create policy "team_members_update_admin"
+on team_members for update
+using (
+  exists (
+    select 1
+    from team_members me
+    where me.organization_id = team_members.organization_id
+      and me.user_id = auth.uid()
+      and me.role = 'admin'
+  )
+)
+with check (
+  exists (
+    select 1
+    from team_members me
+    where me.organization_id = team_members.organization_id
+      and me.user_id = auth.uid()
+      and me.role = 'admin'
+  )
+);
+
+drop policy if exists "team_members_delete_admin" on team_members;
+create policy "team_members_delete_admin"
+on team_members for delete
+using (
+  exists (
+    select 1
+    from team_members me
+    where me.organization_id = team_members.organization_id
+      and me.user_id = auth.uid()
+      and me.role = 'admin'
+  )
+);
+
+drop policy if exists "api_settings_select_admin" on api_settings;
+create policy "api_settings_select_admin"
+on api_settings for select
+using (
+  exists (
+    select 1
+    from team_members tm
+    where tm.organization_id = api_settings.organization_id
+      and tm.user_id = auth.uid()
+      and tm.role = 'admin'
+  )
+);
+
+drop policy if exists "api_settings_insert_admin" on api_settings;
+create policy "api_settings_insert_admin"
+on api_settings for insert
+with check (
+  exists (
+    select 1
+    from team_members tm
+    where tm.organization_id = api_settings.organization_id
+      and tm.user_id = auth.uid()
+      and tm.role = 'admin'
+  )
+);
+
+drop policy if exists "api_settings_update_admin" on api_settings;
+create policy "api_settings_update_admin"
+on api_settings for update
+using (
+  exists (
+    select 1
+    from team_members tm
+    where tm.organization_id = api_settings.organization_id
+      and tm.user_id = auth.uid()
+      and tm.role = 'admin'
+  )
+)
+with check (
+  exists (
+    select 1
+    from team_members tm
+    where tm.organization_id = api_settings.organization_id
+      and tm.user_id = auth.uid()
+      and tm.role = 'admin'
+  )
+);
+
+drop policy if exists "usage_metrics_select_org_member" on usage_metrics;
+create policy "usage_metrics_select_org_member"
+on usage_metrics for select
+using (
+  exists (
+    select 1
+    from team_members tm
+    where tm.organization_id = usage_metrics.organization_id
+      and tm.user_id = auth.uid()
+  )
+);
+
+insert into storage.buckets (id, name, public)
+values ('bandjoes-assets', 'bandjoes-assets', true)
+on conflict (id) do nothing;
+
+drop policy if exists "bandjoes_assets_public_read" on storage.objects;
+create policy "bandjoes_assets_public_read"
+  on storage.objects for select
+  using (bucket_id = 'bandjoes-assets');
+
+drop policy if exists "bandjoes_assets_authenticated_write" on storage.objects;
+create policy "bandjoes_assets_authenticated_write"
+  on storage.objects for all
+  to authenticated
+  using (bucket_id = 'bandjoes-assets')
+  with check (bucket_id = 'bandjoes-assets');

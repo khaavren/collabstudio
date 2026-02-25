@@ -1,3 +1,8 @@
+insert into organizations (name, slug, contact_email)
+values ('Band Joes Studio', 'band-joes-studio', null)
+on conflict (slug) do update
+set name = excluded.name;
+
 with upsert_rooms as (
   insert into rooms (name, slug)
   values

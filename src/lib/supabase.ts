@@ -148,10 +148,38 @@ export async function fetchAssetDetails(assetId: string) {
   };
 }
 
+async function requestGeneratedImage(prompt: string, size: string) {
+  const fallback = placeholderUrl(prompt, size);
+  const {
+    data: { session }
+  } = await supabase.auth.getSession();
+
+  try {
+    const response = await fetch("/api/generate-image", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {})
+      },
+      body: JSON.stringify({ prompt, size })
+    });
+
+    if (!response.ok) {
+      return fallback;
+    }
+
+    const payload = (await response.json()) as { imageUrl?: string };
+    return payload.imageUrl ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 async function uploadImageToStorage(prompt: string, size: string, file?: File | null) {
   const blob = file
     ? file
-    : await fetch(placeholderUrl(prompt, size)).then(async (response) => {
+    : await requestGeneratedImage(prompt, size).then(async (generatedUrl) => {
+        const response = await fetch(generatedUrl);
         if (!response.ok) {
           throw new Error("Failed to generate placeholder image.");
         }

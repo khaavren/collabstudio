@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLoaderData, useNavigate, useParams } from "react-router-dom";
 import { AssetCard } from "@/components/AssetCard";
+import { AssetDetailView } from "@/components/AssetDetailView";
 import { EmptyState } from "@/components/EmptyState";
 import { GenerateModal } from "@/components/GenerateModal";
-import { InspectorPanel } from "@/components/InspectorPanel";
 import { PageHeader } from "@/components/PageHeader";
 import { Sidebar } from "@/components/Sidebar";
 import {
@@ -124,10 +124,8 @@ export function RoomPage() {
       const data = await fetchAssetsForRoom(activeRoom.id);
       setAssets(data);
 
-      if (data.length === 0) {
+      if (data.length === 0 || !data.some((asset) => asset.id === selectedAssetId)) {
         setSelectedAssetId(null);
-      } else if (!data.some((asset) => asset.id === selectedAssetId)) {
-        setSelectedAssetId(data[0].id);
       }
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : "Unable to load assets.");
@@ -149,7 +147,11 @@ export function RoomPage() {
       setVersions(detail.versions);
       setAnnotations(detail.annotations);
       setComments(detail.comments);
-      setActiveVersionId((current) => current ?? detail.versions[0]?.id ?? null);
+      setActiveVersionId((current) =>
+        current && detail.versions.some((version) => version.id === current)
+          ? current
+          : detail.versions[0]?.id ?? null
+      );
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : "Unable to load inspector.");
     }
@@ -283,6 +285,24 @@ export function RoomPage() {
     }
   }
 
+  async function handleSendPrompt(prompt: string) {
+    if (!selectedAsset) return;
+
+    const baseVersion =
+      versions.find((version) => version.id === activeVersionId) ??
+      versions[0] ??
+      null;
+
+    await handleGenerate({
+      title: selectedAsset.title,
+      prompt,
+      style: baseVersion?.style ?? "Product Photography",
+      size: baseVersion?.size ?? "1024x1024",
+      notes: "",
+      referenceFile: null
+    });
+  }
+
   if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center text-sm text-[var(--muted-foreground)]">
@@ -301,71 +321,91 @@ export function RoomPage() {
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <PageHeader
-          assetCount={filteredAssets.length}
-          filter={filter}
-          onFilterChange={setFilter}
-          onGenerate={() => {
-            setGeneratePreset(defaultGenerate);
-            setIsGenerateOpen(true);
-          }}
-          onSearchChange={setSearch}
-          roomTitle={activeRoom?.name ?? "Room"}
-          searchValue={search}
-        />
-
         {error ? (
           <div className="mx-6 mt-4 rounded-lg border border-[#e8cfc6] bg-[#fff4f0] px-4 py-2 text-sm text-[#9d4d3d]">
             {error}
           </div>
         ) : null}
 
-        <main className="min-h-0 flex-1 overflow-y-auto p-6">
-          {filteredAssets.length === 0 ? (
-            <EmptyState
+        {selectedAsset ? (
+          <AssetDetailView
+            activeVersionId={activeVersionId}
+            annotations={annotations}
+            asset={selectedAsset}
+            comments={comments}
+            onAddComment={handleAddComment}
+            onBack={() => {
+              setSelectedAssetId(null);
+              setActiveVersionId(null);
+            }}
+            onCreateVariant={(version) => {
+              setGeneratePreset({
+                title: selectedAsset.title,
+                prompt: `${version.prompt}\n\nCreate a close variant with subtle improvements.`,
+                style: version.style,
+                size: version.size,
+                notes: version.notes ?? "",
+                referenceFile: null
+              });
+              setIsGenerateOpen(true);
+            }}
+            onRegenerate={(version) => {
+              setGeneratePreset({
+                title: selectedAsset.title,
+                prompt: version.prompt,
+                style: version.style,
+                size: version.size,
+                notes: version.notes ?? "",
+                referenceFile: null
+              });
+              setIsGenerateOpen(true);
+            }}
+            onSelectVersion={setActiveVersionId}
+            onSendPrompt={handleSendPrompt}
+            versions={versions}
+          />
+        ) : (
+          <>
+            <PageHeader
+              assetCount={filteredAssets.length}
+              filter={filter}
+              onFilterChange={setFilter}
               onGenerate={() => {
                 setGeneratePreset(defaultGenerate);
                 setIsGenerateOpen(true);
               }}
+              onSearchChange={setSearch}
+              roomTitle={activeRoom?.name ?? "Room"}
+              searchValue={search}
             />
-          ) : (
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {filteredAssets.map((asset) => (
-                <AssetCard
-                  asset={asset}
-                  isSelected={asset.id === selectedAssetId}
-                  key={asset.id}
-                  onSelect={() => setSelectedAssetId(asset.id)}
-                />
-              ))}
-            </div>
-          )}
-        </main>
-      </div>
 
-      {selectedAsset ? (
-        <InspectorPanel
-          activeVersionId={activeVersionId}
-          annotations={annotations}
-          asset={selectedAsset}
-          comments={comments}
-          onAddComment={handleAddComment}
-          onClose={() => setSelectedAssetId(null)}
-          onRegenerate={(version) => {
-            setGeneratePreset({
-              title: selectedAsset.title,
-              prompt: version.prompt,
-              style: version.style,
-              size: version.size,
-              notes: version.notes ?? "",
-              referenceFile: null
-            });
-            setIsGenerateOpen(true);
-          }}
-          onSelectVersion={setActiveVersionId}
-          versions={versions}
-        />
-      ) : null}
+            <main className="min-h-0 flex-1 overflow-y-auto p-6">
+              {filteredAssets.length === 0 ? (
+                <EmptyState
+                  onGenerate={() => {
+                    setGeneratePreset(defaultGenerate);
+                    setIsGenerateOpen(true);
+                  }}
+                />
+              ) : (
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  {filteredAssets.map((asset) => (
+                    <AssetCard
+                      asset={asset}
+                      isSelected={asset.id === selectedAssetId}
+                      key={asset.id}
+                      onSelect={() => {
+                        setSelectedAssetId(asset.id);
+                        setActiveVersionId(null);
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+            </main>
+          </>
+        )}
+      </div>
 
       <GenerateModal
         initialValues={generatePreset}
