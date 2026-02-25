@@ -39,7 +39,7 @@ export function SiteTopNav() {
 
   return (
     <header className="border-b border-[var(--border)] bg-[var(--background)]/95">
-      <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-6">
+      <div className="site-shell flex h-16 items-center justify-between px-6">
         <Link className="text-lg font-medium text-[var(--foreground)]" to="/">
           MagisterLudi
         </Link>

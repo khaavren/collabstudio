@@ -55,7 +55,7 @@ export function HomePage() {
       <SiteTopNav />
 
       <main className="flex-1">
-        <section className="mx-auto flex max-w-6xl flex-col items-center px-6 pb-16 pt-20 text-center md:pt-28">
+        <section className="site-shell flex flex-col items-center px-6 pb-16 pt-20 text-center md:pt-28">
           <span className="inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--card)] px-4 py-1.5 text-xs font-medium text-[var(--muted-foreground)]">
             Bring Your Own AI Platform
           </span>
@@ -87,7 +87,7 @@ export function HomePage() {
           </div>
         </section>
 
-        <section className="mx-auto max-w-6xl px-6 pb-20" id="features">
+        <section className="site-shell px-6 pb-20" id="features">
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {features.map((feature) => (
               <article
@@ -108,7 +108,7 @@ export function HomePage() {
       </main>
 
       <footer className="mt-auto border-t border-[var(--border)] bg-[var(--background)]" id="about">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-5">
+        <div className="site-shell flex items-center justify-between gap-4 px-6 py-5">
           <div className="flex items-center gap-3 text-sm text-[var(--muted-foreground)]">
             <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-[var(--primary)] text-white">
               <Sparkles className="h-3.5 w-3.5" />

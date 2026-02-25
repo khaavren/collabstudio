@@ -18,6 +18,11 @@ body {
   font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
+.site-shell {
+  margin-inline: auto;
+  width: min(100%, 1440px);
+}
+
 button,
 input,
 select,
