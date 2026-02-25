@@ -1,5 +1,7 @@
-import { Pencil, Plus } from "lucide-react";
+import { Grid2x2, LogOut, Pencil, Plus } from "lucide-react";
 import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "@/app/context/auth-context";
 import { EditRoomModal } from "@/components/EditRoomModal";
 import type { Room } from "@/lib/types";
 
@@ -20,6 +22,8 @@ export function Sidebar({
   userName = "Phil",
   userSubtitle = "Product Lead"
 }: SidebarProps) {
+  const navigate = useNavigate();
+  const { logout } = useAuth();
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);
   const [hoveredRoomId, setHoveredRoomId] = useState<string | null>(null);
   const [roomNameOverrides, setRoomNameOverrides] = useState<Record<string, string>>({});
@@ -36,6 +40,11 @@ export function Sidebar({
 
   function getRoomName(room: Room) {
     return roomNameOverrides[room.id] ?? room.name;
+  }
+
+  function handleLogout() {
+    logout();
+    navigate("/", { replace: true });
   }
 
   return (
@@ -119,6 +128,24 @@ export function Sidebar({
               <p className="text-sm text-[var(--foreground)]">{userName}</p>
               <p className="text-xs text-[var(--muted-foreground)]">{userSubtitle}</p>
             </div>
+          </div>
+
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <Link
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)] px-2 py-1.5 text-xs text-[var(--foreground)] transition hover:bg-[var(--accent)]"
+              to="/"
+            >
+              <Grid2x2 className="h-3.5 w-3.5" />
+              Workspaces
+            </Link>
+            <button
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)] px-2 py-1.5 text-xs text-[var(--foreground)] transition hover:bg-[var(--accent)]"
+              onClick={handleLogout}
+              type="button"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              Logout
+            </button>
           </div>
         </div>
       </aside>
