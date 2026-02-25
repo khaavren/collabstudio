@@ -49,59 +49,88 @@ const features: Feature[] = [
 
 export function HomePage() {
   return (
-    <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
-      <section className="mx-auto flex max-w-6xl flex-col items-center px-6 pb-16 pt-20 text-center md:pt-28">
-        <span className="inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--card)] px-4 py-1.5 text-xs font-medium text-[var(--muted-foreground)]">
-          Bring Your Own AI Platform
-        </span>
-
-        <h1 className="mt-6 max-w-4xl text-balance text-4xl font-medium leading-tight tracking-tight md:text-6xl">
-          Build Products Through Conversation
-        </h1>
-
-        <p className="mt-6 max-w-3xl text-pretty text-base leading-7 text-[var(--muted-foreground)] md:text-lg">
-          A collaborative workspace for teams building with AI. Connect your favorite AI
-          platform, ChatGPT, Claude, or any model you choose. MagisterLudi organizes your
-          iterations, preserves context, and keeps your team aligned.
-        </p>
-
-        <div className="mt-9 flex flex-col items-center gap-3 sm:flex-row">
-          <Link
-            className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-5 py-2.5 text-sm font-medium text-white transition hover:opacity-90"
-            to="/signup"
-          >
-            Get Started
-            <ArrowRight className="h-4 w-4" />
+    <div className="flex min-h-screen flex-col bg-[var(--background)] text-[var(--foreground)]">
+      <header className="border-b border-[var(--border)] bg-[var(--background)]/95">
+        <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-6">
+          <Link className="text-lg font-medium text-[var(--foreground)]" to="/">
+            MagisterLudi
           </Link>
-          <Link
-            className="rounded-lg border border-[var(--border)] bg-[var(--card)] px-5 py-2.5 text-sm text-[var(--foreground)] transition hover:bg-[var(--accent)]"
-            to="/login"
-          >
-            Login
-          </Link>
-        </div>
-      </section>
 
-      <section className="mx-auto max-w-6xl px-6 pb-20" id="features">
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {features.map((feature) => (
-            <article
-              className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5"
-              key={feature.title}
+          <nav className="flex items-center gap-5 text-sm">
+            <a className="text-[var(--muted-foreground)] transition hover:text-[var(--foreground)]" href="#features">
+              Features
+            </a>
+            <a className="text-[var(--muted-foreground)] transition hover:text-[var(--foreground)]" href="#about">
+              About
+            </a>
+            <Link className="text-[var(--muted-foreground)] transition hover:text-[var(--foreground)]" to="/login">
+              Login
+            </Link>
+            <Link
+              className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
+              to="/signup"
             >
-              <div className="mb-4 inline-flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--accent)]">
-                <feature.icon className="h-5 w-5 text-[var(--primary)]" />
-              </div>
-              <h2 className="text-base font-medium text-[var(--foreground)]">{feature.title}</h2>
-              <p className="mt-2 text-sm leading-6 text-[var(--muted-foreground)]">
-                {feature.description}
-              </p>
-            </article>
-          ))}
+              Get Started
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </nav>
         </div>
-      </section>
+      </header>
 
-      <footer className="border-t border-[var(--border)] bg-[var(--card)]" id="about">
+      <main className="flex-1">
+        <section className="mx-auto flex max-w-6xl flex-col items-center px-6 pb-16 pt-20 text-center md:pt-28">
+          <span className="inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--card)] px-4 py-1.5 text-xs font-medium text-[var(--muted-foreground)]">
+            Bring Your Own AI Platform
+          </span>
+
+          <h1 className="mt-6 max-w-4xl text-balance text-4xl font-medium leading-tight tracking-tight md:text-6xl">
+            Build Products Through Conversation
+          </h1>
+
+          <p className="mt-6 max-w-3xl text-pretty text-base leading-7 text-[var(--muted-foreground)] md:text-lg">
+            A collaborative workspace for teams building with AI. Connect your favorite AI
+            platform, ChatGPT, Claude, or any model you choose. MagisterLudi organizes your
+            iterations, preserves context, and keeps your team aligned.
+          </p>
+
+          <div className="mt-9 flex flex-col items-center gap-3 sm:flex-row">
+            <Link
+              className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-5 py-2.5 text-sm font-medium text-white transition hover:opacity-90"
+              to="/signup"
+            >
+              Get Started
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+            <Link
+              className="rounded-lg border border-[var(--border)] bg-[var(--card)] px-5 py-2.5 text-sm text-[var(--foreground)] transition hover:bg-[var(--accent)]"
+              to="/login"
+            >
+              Login
+            </Link>
+          </div>
+        </section>
+
+        <section className="mx-auto max-w-6xl px-6 pb-20" id="features">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {features.map((feature) => (
+              <article
+                className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5"
+                key={feature.title}
+              >
+                <div className="mb-4 inline-flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--accent)]">
+                  <feature.icon className="h-5 w-5 text-[var(--primary)]" />
+                </div>
+                <h2 className="text-base font-medium text-[var(--foreground)]">{feature.title}</h2>
+                <p className="mt-2 text-sm leading-6 text-[var(--muted-foreground)]">
+                  {feature.description}
+                </p>
+              </article>
+            ))}
+          </div>
+        </section>
+      </main>
+
+      <footer className="mt-auto border-t border-[var(--border)] bg-[var(--card)]" id="about">
         <div className="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-7 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-lg font-medium text-[var(--foreground)]">MagisterLudi</p>
@@ -126,6 +155,6 @@ export function HomePage() {
           © {new Date().getFullYear()} MagisterLudi. All rights reserved.
         </div>
       </footer>
-    </main>
+    </div>
   );
 }
