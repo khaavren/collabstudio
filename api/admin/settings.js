@@ -98,15 +98,23 @@ async function loadTeamMembersWithEmails(organizationId) {
 
   const userMap = new Map(usersPage.users.map((entry) => [entry.id, entry]));
 
-  return (members ?? []).map((member) => ({
-    ...member,
-    role: parseRole(member.role),
-    email: userMap.get(member.user_id)?.email ?? null,
-    displayName:
+  return (members ?? []).map((member) => {
+    const tableDisplayName =
+      typeof member.display_name === "string" && member.display_name.trim().length > 0
+        ? member.display_name.trim()
+        : null;
+    const metadataDisplayName =
       userMap.get(member.user_id)?.user_metadata?.full_name ??
       userMap.get(member.user_id)?.user_metadata?.name ??
-      null
-  }));
+      null;
+
+    return {
+      ...member,
+      role: parseRole(member.role),
+      email: userMap.get(member.user_id)?.email ?? null,
+      displayName: tableDisplayName ?? metadataDisplayName
+    };
+  });
 }
 
 async function getSettingsPayload(organizationId) {

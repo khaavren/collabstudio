@@ -246,10 +246,13 @@ create table if not exists team_members (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references organizations(id) on delete cascade,
   user_id uuid not null,
+  display_name text,
   role text not null check (role in ('admin', 'editor', 'viewer')),
   created_at timestamptz not null default now(),
   unique (organization_id, user_id)
 );
+
+alter table team_members add column if not exists display_name text;
 
 create table if not exists api_settings (
   id uuid primary key default gen_random_uuid(),

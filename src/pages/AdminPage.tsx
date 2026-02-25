@@ -52,10 +52,21 @@ function publicStorageUrl(path: string | null) {
 }
 
 async function safeJson<T>(response: Response, fallbackMessage: string): Promise<T> {
-  try {
-    return (await response.json()) as T;
-  } catch {
+  const raw = await response.text();
+
+  if (!raw) {
     return { error: fallbackMessage } as T;
+  }
+
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    const looksLikeHtml = raw.toLowerCase().includes("<html") || raw.toLowerCase().includes("<!doctype");
+    const condensed = raw.replace(/\s+/g, " ").trim().slice(0, 180);
+
+    return {
+      error: looksLikeHtml ? fallbackMessage : condensed || fallbackMessage
+    } as T;
   }
 }
 
@@ -376,6 +387,9 @@ export function AdminPage() {
   }
 
   async function updateMember(memberId: string) {
+    setError(null);
+    setMessage(null);
+
     const role = teamRoleDrafts[memberId];
     const displayName = teamNameDrafts[memberId] ?? "";
     if (!role) return;
@@ -388,7 +402,7 @@ export function AdminPage() {
     const payload = await safeJson<{ error?: string }>(response, "Unable to update member.");
 
     if (!response.ok) {
-      setError(payload.error ?? "Unable to update member.");
+      setError(payload.error ?? `Unable to update member (HTTP ${response.status}).`);
       return;
     }
 

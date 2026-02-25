@@ -11,6 +11,39 @@ function parseDisplayName(value) {
   return value.trim().slice(0, 80);
 }
 
+function isMissingDisplayNameColumn(error) {
+  const message = String(error?.message ?? "").toLowerCase();
+  const code = String(error?.code ?? "");
+  return code === "42703" || (message.includes("display_name") && message.includes("column"));
+}
+
+async function updateUserMetadataDisplayName(adminClient, userId, displayName) {
+  const { data: userRecord, error: userLookupError } = await adminClient.auth.admin.getUserById(userId);
+
+  if (userLookupError || !userRecord?.user) {
+    throw new HttpError(userLookupError?.message ?? "User not found.", 500);
+  }
+
+  const currentMetadata =
+    userRecord.user.user_metadata && typeof userRecord.user.user_metadata === "object"
+      ? userRecord.user.user_metadata
+      : {};
+
+  const nextMetadata = {
+    ...currentMetadata,
+    full_name: displayName || null,
+    name: displayName || null
+  };
+
+  const { error: userUpdateError } = await adminClient.auth.admin.updateUserById(userId, {
+    user_metadata: nextMetadata
+  });
+
+  if (userUpdateError) {
+    throw new HttpError(userUpdateError.message, 500);
+  }
+}
+
 function getMemberId(req) {
   if (req.query?.memberId) {
     return String(req.query.memberId);
@@ -78,34 +111,18 @@ export default async function handler(req, res) {
       }
 
       if (displayName !== undefined) {
-        const { data: userRecord, error: userLookupError } = await adminClient.auth.admin.getUserById(
-          existingMember.user_id
-        );
+        const { error: profileUpdateError } = await adminClient
+          .from("team_members")
+          .update({ display_name: displayName || null })
+          .eq("id", memberId)
+          .eq("organization_id", organization.id);
 
-        if (userLookupError || !userRecord?.user) {
-          throw new HttpError(userLookupError?.message ?? "User not found.", 500);
-        }
-
-        const currentMetadata =
-          userRecord.user.user_metadata && typeof userRecord.user.user_metadata === "object"
-            ? userRecord.user.user_metadata
-            : {};
-
-        const nextMetadata = {
-          ...currentMetadata,
-          full_name: displayName || null,
-          name: displayName || null
-        };
-
-        const { error: userUpdateError } = await adminClient.auth.admin.updateUserById(
-          existingMember.user_id,
-          {
-            user_metadata: nextMetadata
+        if (profileUpdateError) {
+          if (isMissingDisplayNameColumn(profileUpdateError)) {
+            await updateUserMetadataDisplayName(adminClient, existingMember.user_id, displayName);
+          } else {
+            throw new HttpError(profileUpdateError.message, 500);
           }
-        );
-
-        if (userUpdateError) {
-          throw new HttpError(userUpdateError.message, 500);
         }
       }
 
