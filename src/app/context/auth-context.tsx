@@ -13,6 +13,7 @@ type AuthContextValue = {
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
   signup: (name: string, email: string, password: string) => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
   logout: () => void;
   updateUser: (next: Partial<AuthUser>) => void;
 };
@@ -96,6 +97,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     persist(nextUser);
   }
 
+  async function resetPassword(email: string) {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) {
+      throw new Error("Email is required.");
+    }
+  }
+
   function logout() {
     persist(null);
   }
@@ -120,6 +128,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isAuthenticated: Boolean(user),
       login,
       signup,
+      resetPassword,
       logout,
       updateUser
     }),
