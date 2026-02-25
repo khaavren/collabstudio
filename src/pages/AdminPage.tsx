@@ -35,6 +35,7 @@ const EMPTY_API_FORM = {
 };
 
 type AdminTab = "organization" | "account" | "model" | "usage" | "security";
+const WORKSPACE_PATH = "/room/hard-hat-system";
 
 function slugify(value: string) {
   return value
@@ -495,7 +496,7 @@ export function AdminPage() {
             </button>
           </form>
 
-          <Link className="block text-sm text-[var(--muted-foreground)] hover:underline" to="/">
+          <Link className="block text-sm text-[var(--muted-foreground)] hover:underline" to={WORKSPACE_PATH}>
             Back to workspace
           </Link>
         </div>
@@ -512,7 +513,7 @@ export function AdminPage() {
             <button className="text-[var(--muted-foreground)] hover:underline" onClick={signOut} type="button">
               Sign out
             </button>
-            <Link className="text-[var(--muted-foreground)] hover:underline" to="/">
+            <Link className="text-[var(--muted-foreground)] hover:underline" to={WORKSPACE_PATH}>
               Back to workspace
             </Link>
           </div>
@@ -556,7 +557,7 @@ export function AdminPage() {
           <div className="px-8 py-4">
             <Link
               className="inline-flex items-center gap-2 text-base text-[#d9e0eb] transition hover:text-white"
-              to="/"
+              to={WORKSPACE_PATH}
             >
               <ArrowLeft className="h-4 w-4" />
               Back to App
