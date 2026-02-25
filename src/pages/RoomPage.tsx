@@ -3,7 +3,7 @@ import { useLoaderData, useNavigate, useParams } from "react-router-dom";
 import { AssetCard } from "@/components/AssetCard";
 import { AssetDetailView } from "@/components/AssetDetailView";
 import { EditAssetModal } from "@/components/EditAssetModal";
-import { EmptyState } from "@/components/EmptyState";
+import { GenerateInlinePanel } from "@/components/GenerateInlinePanel";
 import { GenerateModal } from "@/components/GenerateModal";
 import { PageHeader } from "@/components/PageHeader";
 import { Sidebar } from "@/components/Sidebar";
@@ -518,12 +518,12 @@ export function RoomPage() {
 
             <main className="min-h-0 flex-1 overflow-y-auto p-6">
               {filteredAssets.length === 0 ? (
-                <EmptyState
-                  onGenerate={() => {
-                    setGeneratePreset(defaultGenerate);
-                    setIsGenerateOpen(true);
-                  }}
-                />
+                <div className="flex min-h-[calc(100vh-220px)] items-center justify-center">
+                  <GenerateInlinePanel
+                    initialValues={defaultGenerate}
+                    onGenerate={handleGenerate}
+                  />
+                </div>
               ) : (
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                   {filteredAssets.map((asset) => (
