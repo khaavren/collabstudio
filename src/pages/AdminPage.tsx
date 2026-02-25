@@ -65,6 +65,97 @@ type ApiTestResponse = {
 type AdminTab = "organization" | "account" | "model" | "usage" | "security";
 const WORKSPACE_PATH = "/room/hard-hat-system";
 
+function pickLatestCurrentModels(provider: string, models: string[]) {
+  if (models.length === 0) return [];
+
+  const normalizedProvider = normalizeProviderValue(provider);
+  const uniqueModels = Array.from(new Set(models));
+
+  const openAiPreferred = [
+    "gpt-image-1",
+    "gpt-5",
+    "gpt-5-mini",
+    "gpt-4.1",
+    "gpt-4.1-mini",
+    "gpt-4o",
+    "gpt-4o-mini",
+    "o3",
+    "o4-mini"
+  ];
+
+  const anthropicPreferred = [
+    "claude-opus-4-1",
+    "claude-opus-4",
+    "claude-sonnet-4",
+    "claude-3-7-sonnet-latest",
+    "claude-3-5-sonnet-latest",
+    "claude-3-5-haiku-latest"
+  ];
+
+  const geminiPreferred = [
+    "gemini-2.5-pro",
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
+    "gemini-1.5-pro",
+    "gemini-1.5-flash"
+  ];
+
+  const includesAny = (value: string, parts: string[]) => {
+    const lowered = value.toLowerCase();
+    return parts.some((part) => lowered.includes(part));
+  };
+
+  if (normalizedProvider === "OpenAI") {
+    const preferred = uniqueModels.filter((model) =>
+      openAiPreferred.some((candidate) => model === candidate || model.startsWith(`${candidate}-`))
+    );
+    if (preferred.length > 0) return preferred.slice(0, 12);
+
+    return uniqueModels
+      .filter((model) => includesAny(model, ["gpt-image", "gpt-5", "gpt-4.1", "gpt-4o", "o3", "o4"]))
+      .filter((model) => !includesAny(model, ["realtime", "transcribe", "tts", "audio", "embedding"]))
+      .slice(0, 12);
+  }
+
+  if (normalizedProvider === "Anthropic") {
+    const preferred = uniqueModels.filter((model) =>
+      anthropicPreferred.some((candidate) => model === candidate || model.startsWith(`${candidate}-`))
+    );
+    if (preferred.length > 0) return preferred.slice(0, 12);
+
+    return uniqueModels
+      .filter((model) => model.startsWith("claude-"))
+      .filter((model) => !includesAny(model, ["instant", "legacy"]))
+      .slice(0, 12);
+  }
+
+  if (normalizedProvider === "Google Gemini") {
+    const preferred = uniqueModels.filter((model) =>
+      geminiPreferred.some((candidate) => model === candidate || model.startsWith(`${candidate}-`))
+    );
+    if (preferred.length > 0) return preferred.slice(0, 12);
+
+    return uniqueModels
+      .filter((model) => includesAny(model, ["gemini-2.5", "gemini-2.0", "gemini-1.5"]))
+      .filter((model) => !includesAny(model, ["embedding", "aqa", "vision"]))
+      .slice(0, 12);
+  }
+
+  if (normalizedProvider === "Replicate") {
+    return uniqueModels
+      .filter((model) => includesAny(model, ["flux", "sdxl", "stable", "imagen"]))
+      .slice(0, 12);
+  }
+
+  if (normalizedProvider === "Stability AI") {
+    return uniqueModels
+      .filter((model) => includesAny(model, ["stable-image", "sd3", "sdxl", "ultra", "core"]))
+      .slice(0, 12);
+  }
+
+  return uniqueModels.slice(0, 12);
+}
+
 function normalizeProviderValue(value: string) {
   const raw = value.trim().toLowerCase();
   if (!raw) return "OpenAI";
@@ -138,6 +229,7 @@ export function AdminPage() {
   const [error, setError] = useState<string | null>(null);
   const [testMessage, setTestMessage] = useState<string | null>(null);
   const [modelOptions, setModelOptions] = useState<string[]>([]);
+  const [discoveredModelCount, setDiscoveredModelCount] = useState(0);
   const [settings, setSettings] = useState<AdminSettingsResponse | null>(null);
   const [orgForm, setOrgForm] = useState(EMPTY_ORG_FORM);
   const [apiForm, setApiForm] = useState(EMPTY_API_FORM);
@@ -239,6 +331,7 @@ export function AdminPage() {
       defaultParams: JSON.stringify(nextSettings.apiSettings.defaultParams ?? {}, null, 2)
     });
     setModelOptions(modelValue ? [modelValue] : []);
+    setDiscoveredModelCount(modelValue ? 1 : 0);
 
     setTeamRoleDrafts(
       Object.fromEntries(nextSettings.teamMembers.map((member) => [member.id, member.role]))
@@ -494,9 +587,19 @@ export function AdminPage() {
       const nextModels = Array.isArray(payload.models)
         ? payload.models.filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
         : [];
+      setDiscoveredModelCount(nextModels.length);
 
       if (nextModels.length > 0) {
-        setModelOptions(nextModels);
+        const latestModels = pickLatestCurrentModels(apiForm.provider, nextModels);
+        const shortlist = latestModels.length > 0 ? latestModels : nextModels.slice(0, 12);
+        const selectedModel = (payload.model ?? apiForm.model).trim();
+        setModelOptions(
+          selectedModel && !shortlist.includes(selectedModel)
+            ? [selectedModel, ...shortlist]
+            : shortlist
+        );
+      } else {
+        setModelOptions([]);
       }
 
       if (payload.model) {
@@ -977,6 +1080,7 @@ export function AdminPage() {
                           provider: nextProvider
                         }));
                         setModelOptions([]);
+                        setDiscoveredModelCount(0);
                         setTestMessage(null);
                       }}
                       value={apiForm.provider}
@@ -994,17 +1098,33 @@ export function AdminPage() {
                     <input
                       className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-lg"
                       onChange={(event) => setApiForm((current) => ({ ...current, model: event.target.value }))}
-                      list="provider-models"
-                      placeholder="Select after key test or enter manually"
+                      placeholder="Enter model name or choose from discovered list"
                       value={apiForm.model}
                     />
-                    <datalist id="provider-models">
-                      {modelOptions.map((model) => (
-                        <option key={model} value={model} />
-                      ))}
-                    </datalist>
+                    {modelOptions.length > 0 ? (
+                      <select
+                        className="mt-2 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-base font-normal"
+                        onChange={(event) =>
+                          setApiForm((current) => ({
+                            ...current,
+                            model: event.target.value
+                          }))
+                        }
+                        value={apiForm.model}
+                      >
+                        {modelOptions.map((model) => (
+                          <option key={model} value={model}>
+                            {model}
+                          </option>
+                        ))}
+                      </select>
+                    ) : null}
                     <p className="mt-1 text-sm font-normal text-slate-500">
-                      Run Test Connection after entering API key to discover available models.
+                      {modelOptions.length > 0
+                        ? discoveredModelCount > modelOptions.length
+                          ? `Discovered ${discoveredModelCount} models. Showing ${modelOptions.length} latest current models.`
+                          : `Showing ${modelOptions.length} available models.`
+                        : "Run Test Connection after entering API key to discover available models."}
                     </p>
                   </label>
 
