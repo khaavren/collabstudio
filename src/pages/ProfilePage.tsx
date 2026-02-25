@@ -1,5 +1,5 @@
-import { FormEvent, useEffect, useState } from "react";
-import { ArrowLeft, UserCircle2 } from "lucide-react";
+import { FormEvent, useEffect, useRef, useState } from "react";
+import { ArrowLeft, Upload, UserCircle2, X } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { SiteTopNav } from "@/components/SiteTopNav";
 import { fetchWithAuth } from "@/lib/admin";
@@ -10,6 +10,7 @@ type ProfilePayload = {
     id: string;
     email: string | null;
     displayName: string;
+    avatarUrl: string | null;
     role: string | null;
     organizationId: string | null;
     membershipId: string | null;
@@ -32,10 +33,15 @@ async function safeJson<T>(response: Response, fallbackMessage: string): Promise
 
 export function ProfilePage() {
   const navigate = useNavigate();
+  const avatarInputRef = useRef<HTMLInputElement>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [profileId, setProfileId] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [role, setRole] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -79,8 +85,10 @@ export function ProfilePage() {
       }
 
       const profile = (payload as ProfilePayload).profile;
+      setProfileId(profile.id);
       setDisplayName(profile.displayName ?? "");
       setEmail(profile.email ?? "");
+      setAvatarUrl(profile.avatarUrl ?? null);
       setRole(profile.role);
       setIsLoading(false);
     }
@@ -92,16 +100,66 @@ export function ProfilePage() {
     };
   }, [navigate]);
 
+  useEffect(() => {
+    if (!avatarFile) {
+      setAvatarPreview(null);
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(avatarFile);
+    setAvatarPreview(objectUrl);
+
+    return () => {
+      URL.revokeObjectURL(objectUrl);
+    };
+  }, [avatarFile]);
+
+  async function uploadAvatar(file: File, userId: string) {
+    const extension = file.name.includes(".")
+      ? file.name.split(".").pop()?.toLowerCase() ?? "png"
+      : "png";
+    const safeExtension = /^(png|jpg|jpeg|webp|gif|svg)$/.test(extension) ? extension : "png";
+    const storagePath = `profiles/${userId}/avatar-${Date.now()}.${safeExtension}`;
+
+    const { error: uploadError } = await supabase.storage.from("bandjoes-assets").upload(storagePath, file, {
+      contentType: file.type || "image/png",
+      upsert: true
+    });
+
+    if (uploadError) {
+      throw new Error(uploadError.message);
+    }
+
+    const { data } = supabase.storage.from("bandjoes-assets").getPublicUrl(storagePath);
+    return data.publicUrl;
+  }
+
   async function handleSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
     setMessage(null);
     setIsSaving(true);
 
+    let nextAvatarUrl = avatarUrl;
+
+    try {
+      if (avatarFile) {
+        if (!profileId) {
+          throw new Error("Missing profile ID for avatar upload.");
+        }
+        nextAvatarUrl = await uploadAvatar(avatarFile, profileId);
+      }
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to upload avatar.");
+      setIsSaving(false);
+      return;
+    }
+
     const response = await fetchWithAuth("/api/profile", {
       method: "PATCH",
       body: JSON.stringify({
-        displayName: displayName.trim() || null
+        displayName: displayName.trim() || null,
+        avatarUrl: nextAvatarUrl
       })
     });
 
@@ -117,8 +175,12 @@ export function ProfilePage() {
     }
 
     const profile = (payload as ProfilePayload).profile;
+    setProfileId(profile.id);
     setDisplayName(profile.displayName ?? "");
     setEmail(profile.email ?? "");
+    setAvatarUrl(profile.avatarUrl ?? null);
+    setAvatarFile(null);
+    setAvatarPreview(null);
     setRole(profile.role);
     setMessage("Profile updated.");
     setIsSaving(false);
@@ -171,6 +233,56 @@ export function ProfilePage() {
             ) : null}
 
             <form className="space-y-4" onSubmit={handleSave}>
+              <div className="space-y-1">
+                <span className="text-sm text-[var(--foreground)]">Avatar</span>
+                <div className="flex items-center gap-4 rounded-lg border border-[var(--border)] bg-white px-3 py-3">
+                  {avatarPreview || avatarUrl ? (
+                    <img
+                      alt="Profile avatar"
+                      className="h-14 w-14 rounded-full border border-[var(--border)] object-cover"
+                      src={avatarPreview ?? avatarUrl ?? undefined}
+                    />
+                  ) : (
+                    <div className="flex h-14 w-14 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--accent)] text-[var(--muted-foreground)]">
+                      <UserCircle2 className="h-7 w-7" />
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(event) => setAvatarFile(event.target.files?.[0] ?? null)}
+                      ref={avatarInputRef}
+                      type="file"
+                    />
+                    <button
+                      className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-sm text-[var(--foreground)] transition hover:bg-[var(--accent)]"
+                      onClick={() => avatarInputRef.current?.click()}
+                      type="button"
+                    >
+                      <Upload className="h-4 w-4" />
+                      Upload Avatar
+                    </button>
+
+                    {avatarPreview || avatarUrl ? (
+                      <button
+                        className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-sm text-[var(--muted-foreground)] transition hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
+                        onClick={() => {
+                          setAvatarFile(null);
+                          setAvatarPreview(null);
+                          setAvatarUrl(null);
+                        }}
+                        type="button"
+                      >
+                        <X className="h-4 w-4" />
+                        Remove
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+
               <label className="block space-y-1">
                 <span className="text-sm text-[var(--foreground)]">Display Name</span>
                 <input

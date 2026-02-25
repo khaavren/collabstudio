@@ -9,6 +9,25 @@ function parseDisplayName(value) {
   return trimmed.slice(0, 80);
 }
 
+function parseAvatarUrl(value) {
+  if (value === null) return null;
+  if (typeof value !== "string") return null;
+
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (trimmed.length > 2048) return null;
+
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== "https:" && url.protocol !== "http:") {
+      return null;
+    }
+    return trimmed;
+  } catch {
+    return null;
+  }
+}
+
 function isMissingDisplayNameColumn(error) {
   const code = String(error?.code ?? "");
   const message = String(error?.message ?? "").toLowerCase();
@@ -23,6 +42,11 @@ function getMetadataDisplayName(user) {
     parseDisplayName(user.email?.split("@")[0]) ??
     "User"
   );
+}
+
+function getMetadataAvatarUrl(user) {
+  const metadata = user.user_metadata && typeof user.user_metadata === "object" ? user.user_metadata : {};
+  return parseAvatarUrl(metadata.avatar_url);
 }
 
 async function loadPrimaryMembership(adminClient, userId) {
@@ -70,6 +94,7 @@ function toProfilePayload(user, membership) {
     id: user.id,
     email: user.email ?? null,
     displayName,
+    avatarUrl: getMetadataAvatarUrl(user),
     role: membership?.role ?? null,
     organizationId: membership?.organization_id ?? null,
     membershipId: membership?.id ?? null
@@ -88,10 +113,33 @@ async function handleGet(req, res) {
 
 async function handlePatch(req, res) {
   const body = (await getJsonBody(req)) ?? {};
-  const displayName = body.displayName === null ? null : parseDisplayName(body.displayName ?? "");
+  const hasDisplayName = Object.prototype.hasOwnProperty.call(body, "displayName");
+  const hasAvatarUrl = Object.prototype.hasOwnProperty.call(body, "avatarUrl");
 
-  if (body.displayName !== null && typeof body.displayName !== "string") {
+  if (!hasDisplayName && !hasAvatarUrl) {
+    sendJson(res, 400, { error: "Nothing to update." });
+    return;
+  }
+
+  if (hasDisplayName && body.displayName !== null && typeof body.displayName !== "string") {
     sendJson(res, 400, { error: "Display name must be a string." });
+    return;
+  }
+
+  if (hasAvatarUrl && body.avatarUrl !== null && typeof body.avatarUrl !== "string") {
+    sendJson(res, 400, { error: "Avatar URL must be a string." });
+    return;
+  }
+
+  const displayName = hasDisplayName
+    ? body.displayName === null
+      ? null
+      : parseDisplayName(body.displayName ?? "")
+    : undefined;
+  const avatarUrl = hasAvatarUrl ? parseAvatarUrl(body.avatarUrl) : undefined;
+
+  if (hasAvatarUrl && avatarUrl === null && body.avatarUrl !== null) {
+    sendJson(res, 400, { error: "Avatar URL is invalid." });
     return;
   }
 
@@ -101,11 +149,18 @@ async function handlePatch(req, res) {
   const metadata =
     user.user_metadata && typeof user.user_metadata === "object" ? user.user_metadata : {};
 
+  const nextDisplayName =
+    displayName === undefined
+      ? parseDisplayName(metadata.full_name) ?? parseDisplayName(metadata.name) ?? null
+      : displayName;
+  const nextAvatarUrl = avatarUrl === undefined ? parseAvatarUrl(metadata.avatar_url) : avatarUrl;
+
   const { error: authUpdateError } = await adminClient.auth.admin.updateUserById(user.id, {
     user_metadata: {
       ...metadata,
-      full_name: displayName,
-      name: displayName
+      full_name: nextDisplayName,
+      name: nextDisplayName,
+      avatar_url: nextAvatarUrl
     }
   });
 
@@ -113,13 +168,15 @@ async function handlePatch(req, res) {
     throw new HttpError(authUpdateError.message, 500);
   }
 
-  const { error: membershipError } = await adminClient
-    .from("team_members")
-    .update({ display_name: displayName })
-    .eq("user_id", user.id);
+  if (displayName !== undefined) {
+    const { error: membershipError } = await adminClient
+      .from("team_members")
+      .update({ display_name: displayName })
+      .eq("user_id", user.id);
 
-  if (membershipError && !isMissingDisplayNameColumn(membershipError)) {
-    throw new HttpError(membershipError.message, 500);
+    if (membershipError && !isMissingDisplayNameColumn(membershipError)) {
+      throw new HttpError(membershipError.message, 500);
+    }
   }
 
   const { data: refreshedUserData, error: refreshedUserError } = await adminClient.auth.admin.getUserById(
