@@ -3,12 +3,15 @@ import {
   FolderTree,
   History,
   MessageSquare,
+  Pencil,
   Plus,
   Sparkles,
   Users
 } from "lucide-react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/app/context/auth-context";
+import { EditWorkspaceModal } from "@/components/EditWorkspaceModal";
 
 type Workspace = {
   id: string;
@@ -32,7 +35,7 @@ type Activity = {
   user: string;
 };
 
-const workspaces: Workspace[] = [
+const INITIAL_WORKSPACES: Workspace[] = [
   {
     id: "1",
     name: "Product Development",
@@ -117,6 +120,8 @@ function activityIcon(type: Activity["type"]) {
 
 export function Dashboard() {
   const { logout, user } = useAuth();
+  const [workspaces, setWorkspaces] = useState<Workspace[]>(INITIAL_WORKSPACES);
+  const [editingWorkspace, setEditingWorkspace] = useState<Workspace | null>(null);
 
   const currentUserId = user?.id ?? "1";
   const currentUserName = user?.name ?? "John Doe";
@@ -167,6 +172,22 @@ export function Dashboard() {
       icon: MessageSquare
     }
   ];
+
+  function handleSaveWorkspace(next: { name: string; description: string }) {
+    if (!editingWorkspace) return;
+
+    setWorkspaces((current) =>
+      current.map((workspace) =>
+        workspace.id === editingWorkspace.id
+          ? {
+              ...workspace,
+              name: next.name,
+              description: next.description
+            }
+          : workspace
+      )
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
@@ -240,10 +261,23 @@ export function Dashboard() {
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
             {ownedWorkspaces.map((workspace) => (
               <Link
-                className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5 transition hover:border-[var(--primary)] hover:shadow-sm"
+                className="group relative rounded-xl border border-[var(--border)] bg-[var(--card)] p-5 transition hover:border-[var(--primary)] hover:shadow-sm"
                 key={workspace.id}
                 to={`/workspace/${workspace.id}/room/hard-hat-system`}
               >
+                <button
+                  className="absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--card)] text-[var(--muted-foreground)] opacity-0 shadow-sm transition hover:bg-[var(--accent)] hover:text-[var(--foreground)] group-hover:opacity-100"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setEditingWorkspace(workspace);
+                  }}
+                  title="Edit workspace"
+                  type="button"
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+
                 <div
                   className="mb-4 inline-flex h-10 w-10 items-center justify-center rounded-lg text-white"
                   style={{ backgroundColor: workspace.color }}
@@ -393,6 +427,14 @@ export function Dashboard() {
           </div>
         </section>
       </main>
+
+      <EditWorkspaceModal
+        isOpen={editingWorkspace !== null}
+        onClose={() => setEditingWorkspace(null)}
+        onSave={handleSaveWorkspace}
+        workspaceDescription={editingWorkspace?.description ?? ""}
+        workspaceName={editingWorkspace?.name ?? ""}
+      />
     </div>
   );
 }
