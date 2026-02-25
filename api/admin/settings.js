@@ -3,9 +3,12 @@ import path from "node:path";
 import { encryptSecret } from "../_lib/encryption.js";
 import { requireAdmin } from "../_lib/auth.js";
 import { HttpError, allowMethod, getJsonBody, sendJson } from "../_lib/http.js";
+import {
+  defaultModelForProvider,
+  isSupportedProvider,
+  normalizeProvider
+} from "../_lib/providers.js";
 import { getSupabaseAdminClient } from "../_lib/supabase.js";
-
-const PROVIDERS = new Set(["OpenAI", "Replicate", "Stability", "Custom HTTP"]);
 
 function slugify(value) {
   return String(value)
@@ -149,9 +152,7 @@ async function getSettingsPayload(organizationId) {
   }
 
   const apiSettings = apiSettingsQuery.data;
-  const configured = Boolean(
-    apiSettings?.provider && apiSettings?.model && apiSettings?.encrypted_api_key
-  );
+  const configured = Boolean(apiSettings?.provider && apiSettings?.encrypted_api_key);
 
   return {
     organization: organizationQuery.data,
@@ -210,7 +211,7 @@ async function handlePost(req, res) {
   };
 
   const apiPayload = {
-    provider: String(apiInput.provider ?? "").trim(),
+    provider: normalizeProvider(apiInput.provider),
     model: String(apiInput.model ?? "").trim(),
     defaultImageSize: String(apiInput.defaultImageSize ?? "1024x1024").trim() || "1024x1024",
     defaultParams: String(apiInput.defaultParams ?? "{}"),
@@ -219,7 +220,7 @@ async function handlePost(req, res) {
 
   const errors = validateOrg(orgPayload);
 
-  if (apiPayload.provider && !PROVIDERS.has(apiPayload.provider)) {
+  if (apiPayload.provider && !isSupportedProvider(apiPayload.provider)) {
     errors.push("Provider is invalid.");
   }
 
@@ -254,7 +255,7 @@ async function handlePost(req, res) {
 
   const { data: existingSettings, error: settingsLookupError } = await adminClient
     .from("api_settings")
-    .select("encrypted_api_key")
+    .select("encrypted_api_key, model")
     .eq("organization_id", organization.id)
     .maybeSingle();
 
@@ -266,12 +267,14 @@ async function handlePost(req, res) {
     apiPayload.apiKey.length > 0
       ? encryptSecret(apiPayload.apiKey)
       : existingSettings?.encrypted_api_key ?? null;
+  const persistedModel =
+    apiPayload.model || existingSettings?.model || defaultModelForProvider(apiPayload.provider);
 
   const { error: upsertError } = await adminClient.from("api_settings").upsert(
     {
       organization_id: organization.id,
       provider: nullable(apiPayload.provider),
-      model: nullable(apiPayload.model),
+      model: nullable(persistedModel),
       default_image_size: nullable(apiPayload.defaultImageSize),
       default_params: defaultParams,
       encrypted_api_key: encryptedApiKey,

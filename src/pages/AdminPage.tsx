@@ -34,8 +34,44 @@ const EMPTY_API_FORM = {
   defaultParams: "{}"
 };
 
+const PROVIDER_OPTIONS = [
+  "OpenAI",
+  "Anthropic",
+  "Google Gemini",
+  "Replicate",
+  "Stability AI",
+  "Custom HTTP"
+] as const;
+
+const PROVIDER_LABELS: Record<(typeof PROVIDER_OPTIONS)[number], string> = {
+  OpenAI: "OpenAI",
+  Anthropic: "Anthropic (Claude)",
+  "Google Gemini": "Google Gemini",
+  Replicate: "Replicate",
+  "Stability AI": "Stability AI",
+  "Custom HTTP": "Custom HTTP"
+};
+
+type ApiTestResponse = {
+  ok?: boolean;
+  status?: string;
+  message?: string;
+  provider?: string;
+  model?: string;
+  models?: string[];
+  error?: string;
+};
+
 type AdminTab = "organization" | "account" | "model" | "usage" | "security";
 const WORKSPACE_PATH = "/room/hard-hat-system";
+
+function normalizeProviderValue(value: string) {
+  const raw = value.trim().toLowerCase();
+  if (!raw) return "OpenAI";
+  if (raw === "stability") return "Stability AI";
+  if (raw === "claude" || raw === "anthropic (claude)") return "Anthropic";
+  return PROVIDER_OPTIONS.find((entry) => entry.toLowerCase() === raw) ?? value;
+}
 
 function slugify(value: string) {
   return value
@@ -101,6 +137,7 @@ export function AdminPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [testMessage, setTestMessage] = useState<string | null>(null);
+  const [modelOptions, setModelOptions] = useState<string[]>([]);
   const [settings, setSettings] = useState<AdminSettingsResponse | null>(null);
   const [orgForm, setOrgForm] = useState(EMPTY_ORG_FORM);
   const [apiForm, setApiForm] = useState(EMPTY_API_FORM);
@@ -191,13 +228,17 @@ export function AdminPage() {
       country: nextSettings.organization.country ?? ""
     });
 
+    const providerValue = normalizeProviderValue(nextSettings.apiSettings.provider || "OpenAI");
+    const modelValue = nextSettings.apiSettings.model || "";
+
     setApiForm({
-      provider: nextSettings.apiSettings.provider || "OpenAI",
+      provider: providerValue,
       model: nextSettings.apiSettings.model || "",
       apiKey: "",
       defaultImageSize: nextSettings.apiSettings.defaultImageSize || "1024x1024",
       defaultParams: JSON.stringify(nextSettings.apiSettings.defaultParams ?? {}, null, 2)
     });
+    setModelOptions(modelValue ? [modelValue] : []);
 
     setTeamRoleDrafts(
       Object.fromEntries(nextSettings.teamMembers.map((member) => [member.id, member.role]))
@@ -430,26 +471,47 @@ export function AdminPage() {
   async function testConnection() {
     setIsTesting(true);
     setTestMessage(null);
+    try {
+      const response = await fetchWithAuth("/api/admin/test", {
+        method: "POST",
+        body: JSON.stringify({
+          provider: apiForm.provider,
+          model: apiForm.model,
+          apiKey: apiForm.apiKey
+        })
+      });
 
-    const response = await fetchWithAuth("/api/admin/test", {
-      method: "POST",
-      body: JSON.stringify({})
-    });
+      const payload = await safeJson<ApiTestResponse>(
+        response,
+        "Connection test failed."
+      );
 
-    const payload = await safeJson<{ message?: string; error?: string }>(
-      response,
-      "Connection test failed."
-    );
+      if (!response.ok) {
+        setTestMessage(payload.error ?? "Connection test failed.");
+        return;
+      }
 
-    if (!response.ok) {
-      setTestMessage(payload.error ?? "Connection test failed.");
+      const nextModels = Array.isArray(payload.models)
+        ? payload.models.filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
+        : [];
+
+      if (nextModels.length > 0) {
+        setModelOptions(nextModels);
+      }
+
+      if (payload.model) {
+        setApiForm((current) => ({
+          ...current,
+          model: current.model.trim().length > 0 ? current.model : payload.model ?? current.model
+        }));
+      }
+
+      setTestMessage(payload.message ?? "Connection test complete.");
+    } catch (caught) {
+      setTestMessage(caught instanceof Error ? caught.message : "Connection test failed.");
+    } finally {
       setIsTesting(false);
-      return;
     }
-
-    setTestMessage(payload.message ?? "Connection test complete.");
-    await loadSettings();
-    setIsTesting(false);
   }
 
   if (authLoading || isLoading) {
@@ -908,15 +970,22 @@ export function AdminPage() {
                     Provider
                     <select
                       className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-lg"
-                      onChange={(event) =>
-                        setApiForm((current) => ({ ...current, provider: event.target.value }))
-                      }
+                      onChange={(event) => {
+                        const nextProvider = event.target.value;
+                        setApiForm((current) => ({
+                          ...current,
+                          provider: nextProvider
+                        }));
+                        setModelOptions([]);
+                        setTestMessage(null);
+                      }}
                       value={apiForm.provider}
                     >
-                      <option>OpenAI</option>
-                      <option>Replicate</option>
-                      <option>Stability</option>
-                      <option>Custom HTTP</option>
+                      {PROVIDER_OPTIONS.map((provider) => (
+                        <option key={provider} value={provider}>
+                          {PROVIDER_LABELS[provider]}
+                        </option>
+                      ))}
                     </select>
                   </label>
 
@@ -925,8 +994,18 @@ export function AdminPage() {
                     <input
                       className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-lg"
                       onChange={(event) => setApiForm((current) => ({ ...current, model: event.target.value }))}
+                      list="provider-models"
+                      placeholder="Select after key test or enter manually"
                       value={apiForm.model}
                     />
+                    <datalist id="provider-models">
+                      {modelOptions.map((model) => (
+                        <option key={model} value={model} />
+                      ))}
+                    </datalist>
+                    <p className="mt-1 text-sm font-normal text-slate-500">
+                      Run Test Connection after entering API key to discover available models.
+                    </p>
                   </label>
 
                   <label className="text-lg font-medium text-slate-700">
@@ -978,7 +1057,7 @@ export function AdminPage() {
                     onClick={testConnection}
                     type="button"
                   >
-                    {isTesting ? "Testing..." : "Test Connection"}
+                    {isTesting ? "Testing..." : "Test Connection & Discover Models"}
                   </button>
                   <span
                     className={`rounded-full px-3 py-1 text-sm font-semibold ${

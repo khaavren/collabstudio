@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { decryptSecret } from "./_lib/encryption.js";
 import { HttpError, allowMethod, getJsonBody, sendJson } from "./_lib/http.js";
+import { defaultModelForProvider, normalizeProvider } from "./_lib/providers.js";
 import { getSupabaseAdminClient } from "./_lib/supabase.js";
 import { resolveMembership } from "./_lib/auth.js";
 
@@ -81,18 +82,13 @@ export default async function handler(req, res) {
         .eq("organization_id", organizationId)
         .maybeSingle();
 
-      if (
-        apiSetting?.provider &&
-        apiSetting?.model &&
-        apiSetting?.encrypted_api_key &&
-        apiSetting.encrypted_api_key.length > 0
-      ) {
+      if (apiSetting?.provider && apiSetting?.encrypted_api_key && apiSetting.encrypted_api_key.length > 0) {
         try {
           const key = decryptSecret(apiSetting.encrypted_api_key);
           if (key.length > 0) {
             configured = true;
-            providerUsed = apiSetting.provider;
-            modelUsed = apiSetting.model;
+            providerUsed = normalizeProvider(apiSetting.provider);
+            modelUsed = apiSetting.model || defaultModelForProvider(providerUsed) || "default";
           }
         } catch {
           configured = false;
