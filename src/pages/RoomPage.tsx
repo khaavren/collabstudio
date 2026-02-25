@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLoaderData, useNavigate, useParams } from "react-router-dom";
 import { AssetCard } from "@/components/AssetCard";
 import { AssetDetailView } from "@/components/AssetDetailView";
+import { EditAssetModal } from "@/components/EditAssetModal";
 import { EmptyState } from "@/components/EmptyState";
 import { GenerateModal } from "@/components/GenerateModal";
 import { PageHeader } from "@/components/PageHeader";
@@ -60,6 +61,7 @@ export function RoomPage() {
   const [error, setError] = useState<string | null>(null);
   const [isGenerateOpen, setIsGenerateOpen] = useState(false);
   const [generatePreset, setGeneratePreset] = useState<GenerateInput>(defaultGenerate);
+  const [editingGridAsset, setEditingGridAsset] = useState<AssetWithTags | null>(null);
 
   const activeRoomSlug = params.roomId ?? roomSlug;
 
@@ -337,9 +339,11 @@ export function RoomPage() {
       });
       await loadAssetsData();
       setError(null);
+      return true;
     } catch (caughtError) {
       setAssets(previousAssets);
       setError(caughtError instanceof Error ? caughtError.message : "Unable to update asset.");
+      return false;
     }
   }
 
@@ -435,6 +439,7 @@ export function RoomPage() {
                       asset={asset}
                       isSelected={asset.id === selectedAssetId}
                       key={asset.id}
+                      onEdit={() => setEditingGridAsset(asset)}
                       onSelect={() => {
                         setSelectedAssetId(asset.id);
                         setActiveVersionId(null);
@@ -453,6 +458,27 @@ export function RoomPage() {
         isOpen={isGenerateOpen}
         onClose={() => setIsGenerateOpen(false)}
         onGenerate={handleGenerate}
+      />
+
+      <EditAssetModal
+        assetDescription={editingGridAsset?.description}
+        assetTags={editingGridAsset?.tags ?? []}
+        assetTitle={editingGridAsset?.title ?? ""}
+        isOpen={editingGridAsset !== null}
+        onClose={() => setEditingGridAsset(null)}
+        onSave={(data) => {
+          if (!editingGridAsset) return;
+          void handleAssetUpdate({
+            id: editingGridAsset.id,
+            title: data.title,
+            tags: data.tags,
+            description: data.description
+          }).then((ok) => {
+            if (ok) {
+              setEditingGridAsset(null);
+            }
+          });
+        }}
       />
     </div>
   );

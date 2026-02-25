@@ -1,3 +1,4 @@
+import { Pencil } from "lucide-react";
 import { TagChip } from "@/components/TagChip";
 import { timeAgo } from "@/lib/utils";
 import type { AssetWithTags } from "@/lib/types";
@@ -5,10 +6,11 @@ import type { AssetWithTags } from "@/lib/types";
 type AssetCardProps = {
   asset: AssetWithTags;
   isSelected: boolean;
+  onEdit?: () => void;
   onSelect: () => void;
 };
 
-export function AssetCard({ asset, isSelected, onSelect }: AssetCardProps) {
+export function AssetCard({ asset, isSelected, onEdit, onSelect }: AssetCardProps) {
   return (
     <button
       className={`group rounded-xl border bg-[var(--card)] text-left transition ${
@@ -19,13 +21,28 @@ export function AssetCard({ asset, isSelected, onSelect }: AssetCardProps) {
       onClick={onSelect}
       type="button"
     >
-      <div className="aspect-[4/3] overflow-hidden rounded-t-xl bg-[var(--muted)]">
+      <div className="relative aspect-[4/3] overflow-hidden rounded-t-xl bg-[var(--muted)]">
         <img
           alt={asset.title}
           className="h-full w-full object-cover"
           loading="lazy"
           src={asset.image_url}
         />
+
+        {onEdit ? (
+          <button
+            className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-md bg-white/95 text-[var(--foreground)] shadow-sm transition hover:bg-white"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onEdit();
+            }}
+            title="Edit asset"
+            type="button"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+        ) : null}
       </div>
 
       <div className="space-y-2 p-3">

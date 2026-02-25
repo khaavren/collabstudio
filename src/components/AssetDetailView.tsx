@@ -26,7 +26,7 @@ type AssetDetailViewProps = {
     title: string;
     tags: string[];
     description: string;
-  }) => Promise<void>;
+  }) => Promise<boolean>;
   onCreateVariant: (version: AssetVersion) => void;
   onRegenerate: (version: AssetVersion) => void;
   onSelectVersion: (versionId: string) => void;
@@ -365,13 +365,15 @@ export function AssetDetailView({
     tags: string[];
     description: string;
   }) {
-    await onAssetUpdate({
+    const ok = await onAssetUpdate({
       id: asset.id,
       title: data.title,
       tags: data.tags,
       description: data.description
     });
-    setIsEditModalOpen(false);
+    if (ok) {
+      setIsEditModalOpen(false);
+    }
   }
 
   function scrollToVersion(versionId: string) {
