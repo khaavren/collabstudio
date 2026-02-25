@@ -8,22 +8,11 @@ import {
   Sparkles,
   Users
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/app/context/auth-context";
 import { EditWorkspaceModal } from "@/components/EditWorkspaceModal";
-
-type Workspace = {
-  id: string;
-  name: string;
-  description: string;
-  roomCount: number;
-  lastAccessed: string;
-  collaborators: number;
-  color: string;
-  owner: string;
-  ownerName: string;
-};
+import { loadWorkspaces, saveWorkspaces, type WorkspaceRecord } from "@/lib/workspaces";
 
 type Activity = {
   id: string;
@@ -34,53 +23,6 @@ type Activity = {
   time: string;
   user: string;
 };
-
-const INITIAL_WORKSPACES: Workspace[] = [
-  {
-    id: "1",
-    name: "Product Development",
-    description: "Main product development workspace",
-    roomCount: 4,
-    lastAccessed: "2 hours ago",
-    collaborators: 5,
-    color: "var(--primary)",
-    owner: "1",
-    ownerName: "John Doe"
-  },
-  {
-    id: "2",
-    name: "Industrial Series",
-    description: "Heavy-duty industrial equipment",
-    roomCount: 2,
-    lastAccessed: "1 day ago",
-    collaborators: 3,
-    color: "#2563eb",
-    owner: "1",
-    ownerName: "John Doe"
-  },
-  {
-    id: "3",
-    name: "Marketing Campaign",
-    description: "Q2 marketing materials and assets",
-    roomCount: 3,
-    lastAccessed: "3 days ago",
-    collaborators: 4,
-    color: "#9333ea",
-    owner: "2",
-    ownerName: "Jane Smith"
-  },
-  {
-    id: "4",
-    name: "Design System",
-    description: "Company-wide design components",
-    roomCount: 5,
-    lastAccessed: "4 days ago",
-    collaborators: 8,
-    color: "#16a34a",
-    owner: "3",
-    ownerName: "Mike Johnson"
-  }
-];
 
 const activities: Activity[] = [
   {
@@ -120,8 +62,8 @@ function activityIcon(type: Activity["type"]) {
 
 export function Dashboard() {
   const { logout, user } = useAuth();
-  const [workspaces, setWorkspaces] = useState<Workspace[]>(INITIAL_WORKSPACES);
-  const [editingWorkspace, setEditingWorkspace] = useState<Workspace | null>(null);
+  const [workspaces, setWorkspaces] = useState<WorkspaceRecord[]>(() => loadWorkspaces());
+  const [editingWorkspace, setEditingWorkspace] = useState<WorkspaceRecord | null>(null);
 
   const currentUserId = user?.id ?? "1";
   const currentUserName = user?.name ?? "John Doe";
@@ -172,6 +114,10 @@ export function Dashboard() {
       icon: MessageSquare
     }
   ];
+
+  useEffect(() => {
+    saveWorkspaces(workspaces);
+  }, [workspaces]);
 
   function handleSaveWorkspace(next: { name: string; description: string }) {
     if (!editingWorkspace) return;

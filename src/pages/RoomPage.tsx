@@ -21,6 +21,7 @@ import {
   supabase,
   updateAssetMetadata
 } from "@/lib/supabase";
+import { getWorkspaceNameById } from "@/lib/workspaces";
 import { slugify } from "@/lib/utils";
 import type {
   Annotation,
@@ -49,6 +50,7 @@ export function RoomPage() {
   const { roomSlug } = useLoaderData() as RoomLoaderData;
   const params = useParams();
   const navigate = useNavigate();
+  const activeWorkspaceId = params.workspaceId ?? null;
 
   const [rooms, setRooms] = useState<Room[]>([]);
   const [assets, setAssets] = useState<AssetWithTags[]>([]);
@@ -71,6 +73,10 @@ export function RoomPage() {
   const activeRoom = useMemo(
     () => rooms.find((room) => room.slug === activeRoomSlug) ?? null,
     [activeRoomSlug, rooms]
+  );
+  const workspaceName = useMemo(
+    () => getWorkspaceNameById(activeWorkspaceId) ?? "Workspace",
+    [activeWorkspaceId]
   );
 
   const selectedAsset = useMemo(
@@ -112,7 +118,10 @@ export function RoomPage() {
       setRooms(data);
 
       if (data.length > 0 && !data.some((room) => room.slug === activeRoomSlug)) {
-        navigate(`/room/${data[0].slug}`, { replace: true });
+        const nextPath = activeWorkspaceId
+          ? `/workspace/${activeWorkspaceId}/room/${data[0].slug}`
+          : `/room/${data[0].slug}`;
+        navigate(nextPath, { replace: true });
       }
 
       setError(null);
@@ -121,7 +130,7 @@ export function RoomPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [activeRoomSlug, navigate]);
+  }, [activeRoomSlug, activeWorkspaceId, navigate]);
 
   const loadAssetsData = useCallback(async () => {
     if (!activeRoom) {
@@ -278,7 +287,10 @@ export function RoomPage() {
     try {
       const room = await createRoom(name, slug);
       setRooms((current) => [...current, room]);
-      navigate(`/room/${room.slug}`);
+      const nextPath = activeWorkspaceId
+        ? `/workspace/${activeWorkspaceId}/room/${room.slug}`
+        : `/room/${room.slug}`;
+      navigate(nextPath);
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : "Unable to create room.");
     }
@@ -385,7 +397,7 @@ export function RoomPage() {
   if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center text-sm text-[var(--muted-foreground)]">
-        Loading Band Joes Studio...
+        Loading workspace...
       </div>
     );
   }
@@ -395,8 +407,14 @@ export function RoomPage() {
       <Sidebar
         activeSlug={activeRoomSlug}
         onCreateRoom={handleCreateRoom}
-        onSelectRoom={(slug) => navigate(`/room/${slug}`)}
+        onSelectRoom={(slug) => {
+          const nextPath = activeWorkspaceId
+            ? `/workspace/${activeWorkspaceId}/room/${slug}`
+            : `/room/${slug}`;
+          navigate(nextPath);
+        }}
         rooms={rooms}
+        workspaceName={workspaceName}
         userName={actorName}
         userSubtitle={currentActor?.email ?? "Workspace Member"}
       />

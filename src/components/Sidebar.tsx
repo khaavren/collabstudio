@@ -10,6 +10,7 @@ type SidebarProps = {
   onCreateRoom: () => void;
   onSelectRoom: (slug: string) => void;
   rooms: Room[];
+  workspaceName?: string;
   userName?: string;
   userSubtitle?: string;
 };
@@ -19,6 +20,7 @@ export function Sidebar({
   onCreateRoom,
   onSelectRoom,
   rooms,
+  workspaceName = "Workspace",
   userName = "Phil",
   userSubtitle = "Product Lead"
 }: SidebarProps) {
@@ -51,7 +53,7 @@ export function Sidebar({
     <>
       <aside className="flex h-full w-[240px] flex-col border-r border-[var(--border)] bg-[#FBFBFA]">
         <div className="border-b border-[var(--border)] px-5 py-4">
-          <h1 className="text-base font-medium text-[var(--foreground)]">Band Joes Studio</h1>
+          <h1 className="text-base font-medium text-[var(--foreground)]">{workspaceName}</h1>
         </div>
 
         <nav className="flex-1 space-y-1 p-3">
