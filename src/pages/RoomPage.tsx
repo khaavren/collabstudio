@@ -9,12 +9,14 @@ import { PageHeader } from "@/components/PageHeader";
 import { Sidebar } from "@/components/Sidebar";
 import {
   addComment,
+  type ActorProfile,
   createRoom,
   ensureAnonSession,
   fetchAssetDetails,
   fetchAssetsForRoom,
   fetchRooms,
   generateAssetVersion,
+  getCurrentActorProfile,
   isSupabaseConfigured,
   supabase,
   updateAssetMetadata
@@ -62,6 +64,7 @@ export function RoomPage() {
   const [isGenerateOpen, setIsGenerateOpen] = useState(false);
   const [generatePreset, setGeneratePreset] = useState<GenerateInput>(defaultGenerate);
   const [editingGridAsset, setEditingGridAsset] = useState<AssetWithTags | null>(null);
+  const [currentActor, setCurrentActor] = useState<ActorProfile | null>(null);
 
   const activeRoomSlug = params.roomId ?? roomSlug;
 
@@ -74,6 +77,7 @@ export function RoomPage() {
     () => assets.find((asset) => asset.id === selectedAssetId) ?? null,
     [assets, selectedAssetId]
   );
+  const actorName = currentActor?.displayName ?? "Collaborator";
 
   const filteredAssets = useMemo(() => {
     return assets.filter((asset) => {
@@ -102,6 +106,8 @@ export function RoomPage() {
       }
 
       await ensureAnonSession();
+      const actor = await getCurrentActorProfile();
+      setCurrentActor(actor);
       const data = await fetchRooms();
       setRooms(data);
 
@@ -163,6 +169,36 @@ export function RoomPage() {
   useEffect(() => {
     void loadRoomsData();
   }, [loadRoomsData]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function syncActor() {
+      if (!isSupabaseConfigured) return;
+      try {
+        await ensureAnonSession();
+        const actor = await getCurrentActorProfile();
+        if (!active) return;
+        setCurrentActor(actor);
+      } catch {
+        if (!active) return;
+        setCurrentActor(null);
+      }
+    }
+
+    void syncActor();
+
+    const {
+      data: { subscription }
+    } = supabase.auth.onAuthStateChange(() => {
+      void syncActor();
+    });
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     void loadAssetsData();
@@ -257,7 +293,6 @@ export function RoomPage() {
 
       const assetId = await generateAssetVersion({
         activeAsset,
-        editor: "Phil",
         roomId: activeRoom.id,
         title,
         prompt: input.prompt,
@@ -281,7 +316,7 @@ export function RoomPage() {
     if (!selectedAssetId) return;
 
     try {
-      await addComment(selectedAssetId, "Phil", content);
+      await addComment(selectedAssetId, content, currentActor ?? undefined);
       await loadInspectorData(selectedAssetId);
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : "Unable to add comment.");
@@ -322,7 +357,7 @@ export function RoomPage() {
               title: updatedAsset.title,
               tags: updatedAsset.tags,
               description: updatedAsset.description || null,
-              edited_by: "Phil",
+              edited_by: actorName,
               updated_at: new Date().toISOString()
             }
           : asset
@@ -335,7 +370,7 @@ export function RoomPage() {
         title: updatedAsset.title,
         tags: updatedAsset.tags,
         description: updatedAsset.description,
-        editedBy: "Phil"
+        editedBy: actorName
       });
       await loadAssetsData();
       setError(null);
@@ -362,6 +397,8 @@ export function RoomPage() {
         onCreateRoom={handleCreateRoom}
         onSelectRoom={(slug) => navigate(`/room/${slug}`)}
         rooms={rooms}
+        userName={actorName}
+        userSubtitle={currentActor?.email ?? "Workspace Member"}
       />
 
       <div className="flex min-w-0 flex-1 flex-col">

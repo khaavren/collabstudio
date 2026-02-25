@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import type { PostgrestError } from "@supabase/supabase-js";
+import type { PostgrestError, User } from "@supabase/supabase-js";
 import type {
   Annotation,
   Asset,
@@ -24,6 +24,13 @@ export const supabase = createClient(
   isSupabaseConfigured ? supabaseAnonKey : fallbackSupabaseAnonKey
 );
 
+export type ActorProfile = {
+  displayName: string;
+  avatarUrl: string;
+  email: string | null;
+  userId: string | null;
+};
+
 function toUserErrorMessage(error: PostgrestError | Error) {
   const message = error.message ?? "";
   const code = "code" in error ? error.code : undefined;
@@ -37,6 +44,66 @@ function toUserErrorMessage(error: PostgrestError | Error) {
   }
 
   return message || "Unexpected Supabase error.";
+}
+
+function firstNonEmptyString(...values: unknown[]) {
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    const trimmed = value.trim();
+    if (trimmed.length > 0) return trimmed;
+  }
+  return null;
+}
+
+function resolveActorDisplayName(user: User | null) {
+  if (!user) return "Guest";
+
+  const metadata = user.user_metadata && typeof user.user_metadata === "object" ? user.user_metadata : {};
+  const emailHandle = typeof user.email === "string" ? user.email.split("@")[0] : null;
+
+  const configuredName = firstNonEmptyString(
+    (metadata as Record<string, unknown>).full_name,
+    (metadata as Record<string, unknown>).name,
+    (metadata as Record<string, unknown>).display_name,
+    (metadata as Record<string, unknown>).preferred_username,
+    emailHandle
+  );
+
+  if (configuredName) return configuredName;
+
+  if (user.is_anonymous) {
+    return `Anonymous ${user.id.slice(0, 6)}`;
+  }
+
+  return `User ${user.id.slice(0, 8)}`;
+}
+
+function resolveActorAvatar(user: User | null, displayName: string) {
+  if (user?.user_metadata && typeof user.user_metadata === "object") {
+    const avatar = (user.user_metadata as Record<string, unknown>).avatar_url;
+    if (typeof avatar === "string" && avatar.trim().length > 0) {
+      return avatar;
+    }
+  }
+
+  const seed = user?.id ?? displayName;
+  return `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(seed)}`;
+}
+
+export async function getCurrentActorProfile(): Promise<ActorProfile> {
+  const {
+    data: { session }
+  } = await supabase.auth.getSession();
+
+  const user = session?.user ?? null;
+  const displayName = resolveActorDisplayName(user);
+
+  return {
+    displayName,
+    avatarUrl: resolveActorAvatar(user, displayName),
+    email: user?.email ?? null,
+    userId: user?.id ?? null
+  };
 }
 
 export async function ensureAnonSession() {
@@ -214,7 +281,7 @@ function inferTags(style: string, title: string) {
 
 export async function generateAssetVersion(options: {
   activeAsset?: Asset;
-  editor: string;
+  editor?: string;
   roomId: string;
   title: string;
   prompt: string;
@@ -234,6 +301,8 @@ export async function generateAssetVersion(options: {
     style,
     title
   } = options;
+  const actor = await getCurrentActorProfile();
+  const resolvedEditor = firstNonEmptyString(editor, actor.displayName) ?? "Collaborator";
 
   const imageUrl = await uploadImageToStorage(prompt, size, referenceFile);
 
@@ -248,7 +317,7 @@ export async function generateAssetVersion(options: {
         title,
         current_version: initialVersion,
         image_url: imageUrl,
-        edited_by: editor
+        edited_by: resolvedEditor
       })
       .select("*")
       .single();
@@ -268,30 +337,50 @@ export async function generateAssetVersion(options: {
     throw new Error("Unable to resolve asset for version generation.");
   }
 
-  const { data: latestVersion, error: latestError } = await supabase
-    .from("asset_versions")
-    .select("version")
-    .eq("asset_id", asset.id)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  let nextVersion = "v1";
+  let inserted = false;
 
-  if (latestError) throw new Error(toUserErrorMessage(latestError));
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const { data: versionRows, error: latestError } = await supabase
+      .from("asset_versions")
+      .select("version")
+      .eq("asset_id", asset.id);
 
-  const nextVersionNumber = safeVersionNumber(latestVersion?.version ?? "v0") + 1;
-  const nextVersion = `v${nextVersionNumber}`;
+    if (latestError) throw new Error(toUserErrorMessage(latestError));
 
-  const { error: versionError } = await supabase.from("asset_versions").insert({
-    asset_id: asset.id,
-    version: nextVersion,
-    prompt,
-    size,
-    style,
-    notes: notes || null,
-    editor
-  });
+    const highestVersion = (versionRows ?? []).reduce((max, row) => {
+      const parsed = safeVersionNumber(row.version);
+      return parsed > max ? parsed : max;
+    }, 0);
 
-  if (versionError) throw new Error(toUserErrorMessage(versionError));
+    const nextVersionNumber = highestVersion + 1;
+    nextVersion = `v${nextVersionNumber}`;
+
+    const { error: versionError } = await supabase.from("asset_versions").insert({
+      asset_id: asset.id,
+      version: nextVersion,
+      prompt,
+      size,
+      style,
+      notes: notes || null,
+      editor: resolvedEditor
+    });
+
+    if (!versionError) {
+      inserted = true;
+      break;
+    }
+
+    if (versionError.code === "23505") {
+      continue;
+    }
+
+    throw new Error(toUserErrorMessage(versionError));
+  }
+
+  if (!inserted) {
+    throw new Error("Version conflict detected. Please retry generation.");
+  }
 
   const { error: updateError } = await supabase
     .from("assets")
@@ -299,7 +388,7 @@ export async function generateAssetVersion(options: {
       title,
       current_version: nextVersion,
       image_url: imageUrl,
-      edited_by: editor,
+      edited_by: resolvedEditor,
       updated_at: new Date().toISOString()
     })
     .eq("id", asset.id);
@@ -309,11 +398,13 @@ export async function generateAssetVersion(options: {
   return asset.id;
 }
 
-export async function addComment(assetId: string, author: string, content: string) {
+export async function addComment(assetId: string, content: string, actor?: ActorProfile) {
+  const currentActor = actor ?? (await getCurrentActorProfile());
+
   const { error } = await supabase.from("comments").insert({
     asset_id: assetId,
-    author,
-    avatar_url: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(author)}`,
+    author: currentActor.displayName,
+    avatar_url: currentActor.avatarUrl,
     content
   });
 
@@ -343,9 +434,11 @@ export async function updateAssetMetadata(options: {
   title: string;
   description: string;
   tags: string[];
-  editedBy: string;
+  editedBy?: string;
 }) {
   const { assetId, description, editedBy, title } = options;
+  const actor = await getCurrentActorProfile();
+  const resolvedEditor = firstNonEmptyString(editedBy, actor.displayName) ?? "Collaborator";
   const tags = normalizeTags(options.tags);
 
   const { error: assetError } = await supabase
@@ -353,7 +446,7 @@ export async function updateAssetMetadata(options: {
     .update({
       title: title.trim(),
       description: description.trim() || null,
-      edited_by: editedBy,
+      edited_by: resolvedEditor,
       updated_at: new Date().toISOString()
     })
     .eq("id", assetId);

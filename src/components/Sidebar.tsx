@@ -8,12 +8,22 @@ type SidebarProps = {
   onCreateRoom: () => void;
   onSelectRoom: (slug: string) => void;
   rooms: Room[];
+  userName?: string;
+  userSubtitle?: string;
 };
 
-export function Sidebar({ activeSlug, onCreateRoom, onSelectRoom, rooms }: SidebarProps) {
+export function Sidebar({
+  activeSlug,
+  onCreateRoom,
+  onSelectRoom,
+  rooms,
+  userName = "Phil",
+  userSubtitle = "Product Lead"
+}: SidebarProps) {
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);
   const [hoveredRoomId, setHoveredRoomId] = useState<string | null>(null);
   const [roomNameOverrides, setRoomNameOverrides] = useState<Record<string, string>>({});
+  const avatarLetter = userName.trim().charAt(0).toUpperCase() || "U";
 
   function handleSaveRoom(newName: string) {
     if (!editingRoom) return;
@@ -97,11 +107,11 @@ export function Sidebar({ activeSlug, onCreateRoom, onSelectRoom, rooms }: Sideb
           </a>
           <div className="flex items-center gap-3 rounded-lg px-2 py-1.5">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--muted)] text-xs font-medium text-[var(--foreground)]">
-              P
+              {avatarLetter}
             </div>
             <div>
-              <p className="text-sm text-[var(--foreground)]">Phil</p>
-              <p className="text-xs text-[var(--muted-foreground)]">Product Lead</p>
+              <p className="text-sm text-[var(--foreground)]">{userName}</p>
+              <p className="text-xs text-[var(--muted-foreground)]">{userSubtitle}</p>
             </div>
           </div>
         </div>
