@@ -27,6 +27,7 @@ export type AdminSettingsResponse = {
     role: TeamRole;
     created_at: string;
     email: string | null;
+    displayName: string | null;
   }>;
   apiSettings: {
     provider: string;

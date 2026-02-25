@@ -96,12 +96,16 @@ async function loadTeamMembersWithEmails(organizationId) {
     throw new HttpError(usersError.message, 500);
   }
 
-  const emailMap = new Map(usersPage.users.map((entry) => [entry.id, entry.email ?? null]));
+  const userMap = new Map(usersPage.users.map((entry) => [entry.id, entry]));
 
   return (members ?? []).map((member) => ({
     ...member,
     role: parseRole(member.role),
-    email: emailMap.get(member.user_id) ?? null
+    email: userMap.get(member.user_id)?.email ?? null,
+    displayName:
+      userMap.get(member.user_id)?.user_metadata?.full_name ??
+      userMap.get(member.user_id)?.user_metadata?.name ??
+      null
   }));
 }
 

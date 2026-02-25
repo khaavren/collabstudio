@@ -93,6 +93,7 @@ export function AdminPage() {
   const [orgForm, setOrgForm] = useState(EMPTY_ORG_FORM);
   const [apiForm, setApiForm] = useState(EMPTY_API_FORM);
   const [teamRoleDrafts, setTeamRoleDrafts] = useState<Record<string, TeamRole>>({});
+  const [teamNameDrafts, setTeamNameDrafts] = useState<Record<string, string>>({});
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<TeamRole>("viewer");
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -188,6 +189,14 @@ export function AdminPage() {
 
     setTeamRoleDrafts(
       Object.fromEntries(nextSettings.teamMembers.map((member) => [member.id, member.role]))
+    );
+    setTeamNameDrafts(
+      Object.fromEntries(
+        nextSettings.teamMembers.map((member) => [
+          member.id,
+          member.displayName ?? member.email?.split("@")[0] ?? ""
+        ])
+      )
     );
 
     setIsLoading(false);
@@ -292,15 +301,38 @@ export function AdminPage() {
       await supabase.auth.signOut();
     }
 
-    const { error: signInError } = await supabase.auth.signInWithOtp({
-      email: adminEmail.trim(),
+    const email = adminEmail.trim();
+
+    const adminRedirect = `${window.location.origin}/admin`;
+    let signInError: string | null = null;
+
+    const primaryAttempt = await supabase.auth.signInWithOtp({
+      email,
       options: {
-        emailRedirectTo: `${window.location.origin}/admin`
+        emailRedirectTo: adminRedirect
       }
     });
 
+    if (primaryAttempt.error) {
+      const message = primaryAttempt.error.message.toLowerCase();
+      const shouldRetryWithoutCustomRedirect =
+        message.includes("redirect") || message.includes("not allowed") || message.includes("invalid");
+
+      if (shouldRetryWithoutCustomRedirect) {
+        const fallbackAttempt = await supabase.auth.signInWithOtp({
+          email
+        });
+
+        if (fallbackAttempt.error) {
+          signInError = fallbackAttempt.error.message;
+        }
+      } else {
+        signInError = primaryAttempt.error.message;
+      }
+    }
+
     if (signInError) {
-      setError(signInError.message);
+      setError(signInError);
       return;
     }
 
@@ -343,23 +375,24 @@ export function AdminPage() {
     setIsInviting(false);
   }
 
-  async function updateMemberRole(memberId: string) {
+  async function updateMember(memberId: string) {
     const role = teamRoleDrafts[memberId];
+    const displayName = teamNameDrafts[memberId] ?? "";
     if (!role) return;
 
     const response = await fetchWithAuth(`/api/admin/team/${memberId}`, {
       method: "PATCH",
-      body: JSON.stringify({ role })
+      body: JSON.stringify({ role, displayName })
     });
 
-    const payload = await safeJson<{ error?: string }>(response, "Unable to update role.");
+    const payload = await safeJson<{ error?: string }>(response, "Unable to update member.");
 
     if (!response.ok) {
-      setError(payload.error ?? "Unable to update role.");
+      setError(payload.error ?? "Unable to update member.");
       return;
     }
 
-    setMessage("Role updated.");
+    setMessage("Member updated.");
     await loadSettings();
   }
 
@@ -781,7 +814,20 @@ export function AdminPage() {
                         <tbody>
                           {settings.teamMembers.map((member) => (
                             <tr className="border-b border-slate-200 last:border-b-0" key={member.id}>
-                              <td className="px-4 py-3 text-lg font-medium text-slate-800">{member.user_id}</td>
+                              <td className="space-y-1 px-4 py-3">
+                                <input
+                                  className="w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-base font-medium text-slate-800"
+                                  onChange={(event) =>
+                                    setTeamNameDrafts((current) => ({
+                                      ...current,
+                                      [member.id]: event.target.value
+                                    }))
+                                  }
+                                  placeholder="Full name"
+                                  value={teamNameDrafts[member.id] ?? ""}
+                                />
+                                <p className="text-xs text-slate-500">User ID: {member.user_id}</p>
+                              </td>
                               <td className="px-4 py-3 text-lg text-slate-700">{member.email ?? "Pending invite"}</td>
                               <td className="px-4 py-3">
                                 <select
@@ -803,11 +849,11 @@ export function AdminPage() {
                                 <button
                                   className="text-[#2b66d5] hover:underline"
                                   onClick={() => {
-                                    void updateMemberRole(member.id);
+                                    void updateMember(member.id);
                                   }}
                                   type="button"
                                 >
-                                  Edit
+                                  Save
                                 </button>
                                 <button
                                   className="text-[#2b66d5] hover:underline"
