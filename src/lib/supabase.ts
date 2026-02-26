@@ -255,7 +255,7 @@ async function requestGeneratedOutput(
   prompt: string,
   size: string,
   sourceImageUrl?: string | null,
-  generationMode: "image" | "auto" = "image"
+  generationMode: "force_image" | "image" | "auto" = "force_image"
 ) {
   const fallback = placeholderUrl(prompt, size);
   const {
@@ -379,7 +379,7 @@ async function uploadImageToStorage(
   size: string,
   file?: File | null,
   sourceImageUrl?: string | null,
-  generationMode: "image" | "auto" = "image"
+  generationMode: "force_image" | "image" | "auto" = "force_image"
 ): Promise<GeneratedOutput> {
   const uploadedReferenceUrl = file ? await uploadBlobToStorage(file, "references") : null;
   const resolvedSourceImageUrl = uploadedReferenceUrl ?? sourceImageUrl;
@@ -453,7 +453,7 @@ export async function generateAssetVersion(options: {
   notes: string;
   referenceFile: File | null;
   sourceImageUrl?: string | null;
-  generationMode?: "image" | "auto";
+  generationMode?: "force_image" | "image" | "auto";
 }) {
   const {
     activeAsset,
@@ -462,7 +462,7 @@ export async function generateAssetVersion(options: {
     prompt,
     referenceFile,
     sourceImageUrl,
-    generationMode = "image",
+    generationMode = "force_image",
     roomId,
     size,
     style,

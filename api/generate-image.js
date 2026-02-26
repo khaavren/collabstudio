@@ -25,14 +25,18 @@ function normalizedSourceImageUrl(value) {
 }
 
 function resolveRequestedMode(value) {
-  if (value === "auto" || value === "image" || value === "text") {
+  if (value === "auto" || value === "image" || value === "text" || value === "force_image") {
     return value;
   }
-  return "image";
+  return "auto";
 }
 
 function inferOutputMode(prompt, requestedMode) {
-  if (requestedMode === "image" || requestedMode === "text") {
+  if (requestedMode === "force_image") {
+    return "image";
+  }
+
+  if (requestedMode === "text") {
     return requestedMode;
   }
 
@@ -1066,7 +1070,7 @@ export default async function handler(req, res) {
           }
 
           const defaultParams = readSafeDefaultParams(apiSetting.default_params);
-          if (requestedMode === "auto" && providerUsed === "OpenAI") {
+          if (requestedMode !== "force_image" && providerUsed === "OpenAI") {
             outputMode = await classifyOpenAiOutputMode({
               apiKey: key,
               model: modelUsed,

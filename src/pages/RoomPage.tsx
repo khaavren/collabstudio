@@ -408,7 +408,7 @@ export function RoomPage() {
         notes: input.notes,
         referenceFile: input.referenceFile,
         sourceImageUrl,
-        generationMode: input.generationMode ?? "image"
+        generationMode: input.generationMode ?? "force_image"
       });
 
       setSelectedAssetId(assetId);
@@ -589,7 +589,8 @@ export function RoomPage() {
                 size: version.size,
                 notes: version.notes ?? "",
                 referenceFile: null,
-                sourceImageUrl: version.image_url ?? selectedAsset.image_url
+                sourceImageUrl: version.image_url ?? selectedAsset.image_url,
+                generationMode: "force_image"
               }).catch(() => {
                 // Error banner is already set by handleGenerate.
               });
@@ -602,7 +603,8 @@ export function RoomPage() {
                 size: version.size,
                 notes: version.notes ?? "",
                 referenceFile: null,
-                sourceImageUrl: version.image_url ?? selectedAsset.image_url
+                sourceImageUrl: version.image_url ?? selectedAsset.image_url,
+                generationMode: "force_image"
               }).catch(() => {
                 // Error banner is already set by handleGenerate.
               });

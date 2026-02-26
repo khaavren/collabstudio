@@ -71,5 +71,5 @@ export type GenerateInput = {
   notes: string;
   referenceFile: File | null;
   sourceImageUrl?: string | null;
-  generationMode?: "image" | "auto";
+  generationMode?: "force_image" | "image" | "auto";
 };
