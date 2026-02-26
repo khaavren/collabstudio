@@ -230,15 +230,35 @@ async function requestGeneratedImage(prompt: string, size: string) {
       },
       body: JSON.stringify({ prompt, size })
     });
+    const payload = (await response.json().catch(() => ({}))) as {
+      configured?: boolean;
+      error?: string;
+      imageUrl?: string;
+    };
 
     if (!response.ok) {
+      if (payload.configured === false) {
+        return fallback;
+      }
+
+      throw new Error(payload.error ?? "Configured provider failed to generate an image.");
+    }
+
+    if (payload.imageUrl) {
+      return payload.imageUrl;
+    }
+
+    if (payload.configured === false) {
       return fallback;
     }
 
-    const payload = (await response.json()) as { imageUrl?: string };
-    return payload.imageUrl ?? fallback;
-  } catch {
-    return fallback;
+    throw new Error("Image generation returned no image URL.");
+  } catch (caughtError) {
+    throw new Error(
+      caughtError instanceof Error
+        ? caughtError.message
+        : "Image generation failed. Check Model API configuration in Admin."
+    );
   }
 }
 
