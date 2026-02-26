@@ -241,7 +241,22 @@ export async function fetchAssetDetails(assetId: string) {
   };
 }
 
-async function requestGeneratedImage(prompt: string, size: string, sourceImageUrl?: string | null) {
+type GeneratedOutput =
+  | {
+      outputType: "image";
+      imageUrl: string;
+    }
+  | {
+      outputType: "text";
+      responseText: string;
+    };
+
+async function requestGeneratedOutput(
+  prompt: string,
+  size: string,
+  sourceImageUrl?: string | null,
+  generationMode: "image" | "auto" = "image"
+) {
   const fallback = placeholderUrl(prompt, size);
   const {
     data: { session }
@@ -256,7 +271,7 @@ async function requestGeneratedImage(prompt: string, size: string, sourceImageUr
         "Content-Type": "application/json",
         ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {})
       },
-      body: JSON.stringify({ prompt, size, sourceImageUrl }),
+      body: JSON.stringify({ prompt, size, sourceImageUrl, mode: generationMode }),
       signal: controller.signal
     }).finally(() => {
       window.clearTimeout(timeout);
@@ -265,22 +280,40 @@ async function requestGeneratedImage(prompt: string, size: string, sourceImageUr
       configured?: boolean;
       error?: string;
       imageUrl?: string;
+      outputType?: "image" | "text";
+      responseText?: string;
     };
 
     if (!response.ok) {
       if (payload.configured === false) {
-        return fallback;
+        return {
+          outputType: "image" as const,
+          imageUrl: fallback
+        };
       }
 
       throw new Error(payload.error ?? "Configured provider failed to generate an image.");
     }
 
+    if (payload.outputType === "text" && payload.responseText) {
+      return {
+        outputType: "text" as const,
+        responseText: payload.responseText
+      };
+    }
+
     if (payload.imageUrl) {
-      return payload.imageUrl;
+      return {
+        outputType: "image" as const,
+        imageUrl: payload.imageUrl
+      };
     }
 
     if (payload.configured === false) {
-      return fallback;
+      return {
+        outputType: "image" as const,
+        imageUrl: fallback
+      };
     }
 
     throw new Error("Image generation returned no image URL.");
@@ -321,11 +354,25 @@ async function uploadImageToStorage(
   prompt: string,
   size: string,
   file?: File | null,
-  sourceImageUrl?: string | null
-) {
+  sourceImageUrl?: string | null,
+  generationMode: "image" | "auto" = "image"
+): Promise<GeneratedOutput> {
+  const generated = file
+    ? null
+    : await requestGeneratedOutput(prompt, size, sourceImageUrl, generationMode);
+
+  if (generated?.outputType === "text") {
+    return generated;
+  }
+
   const blob = file
     ? file
-    : await requestGeneratedImage(prompt, size, sourceImageUrl).then(async (generatedUrl) => {
+    : await (async () => {
+        const generatedUrl = generated?.imageUrl;
+        if (!generatedUrl) {
+          throw new Error("Image generation returned no image URL.");
+        }
+
         if (generatedUrl.startsWith("data:image/")) {
           return dataUrlToBlob(generatedUrl);
         }
@@ -343,11 +390,11 @@ async function uploadImageToStorage(
             throw caughtError;
           });
         if (!response.ok) {
-          throw new Error("Failed to generate placeholder image.");
+          throw new Error("Failed to fetch generated image.");
         }
 
         return response.blob();
-      });
+      })();
 
   const filename = `${crypto.randomUUID()}.jpg`;
 
@@ -359,7 +406,10 @@ async function uploadImageToStorage(
   if (error) throw new Error(toUserErrorMessage(error));
 
   const { data } = supabase.storage.from("asset-images").getPublicUrl(filename);
-  return data.publicUrl;
+  return {
+    outputType: "image",
+    imageUrl: data.publicUrl
+  };
 }
 
 function inferTags(style: string, title: string) {
@@ -385,6 +435,7 @@ export async function generateAssetVersion(options: {
   notes: string;
   referenceFile: File | null;
   sourceImageUrl?: string | null;
+  generationMode?: "image" | "auto";
 }) {
   const {
     activeAsset,
@@ -393,6 +444,7 @@ export async function generateAssetVersion(options: {
     prompt,
     referenceFile,
     sourceImageUrl,
+    generationMode = "image",
     roomId,
     size,
     style,
@@ -401,11 +453,23 @@ export async function generateAssetVersion(options: {
   const actor = await getCurrentActorProfile();
   const resolvedEditor = firstNonEmptyString(editor, actor.displayName) ?? "Collaborator";
 
-  const imageUrl = await uploadImageToStorage(prompt, size, referenceFile, sourceImageUrl);
+  const generatedOutput = await uploadImageToStorage(
+    prompt,
+    size,
+    referenceFile,
+    sourceImageUrl,
+    generationMode
+  );
+  const imageUrl = generatedOutput.outputType === "image" ? generatedOutput.imageUrl : null;
+  const responseText = generatedOutput.outputType === "text" ? generatedOutput.responseText : null;
 
   let asset = activeAsset;
 
   if (!asset) {
+    if (!imageUrl) {
+      throw new Error("Image generation is required to create a new project.");
+    }
+
     const initialVersion = "v1";
     const { data: createdAsset, error: assetError } = await supabase
       .from("assets")
@@ -458,6 +522,8 @@ export async function generateAssetVersion(options: {
       version: nextVersion,
       prompt,
       image_url: imageUrl,
+      output_type: generatedOutput.outputType,
+      response_text: responseText,
       size,
       style,
       notes: notes || null,
@@ -485,7 +551,7 @@ export async function generateAssetVersion(options: {
     .update({
       title,
       current_version: nextVersion,
-      image_url: imageUrl,
+      image_url: imageUrl ?? asset.image_url,
       edited_by: resolvedEditor,
       updated_at: new Date().toISOString()
     })

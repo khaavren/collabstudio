@@ -407,7 +407,8 @@ export function RoomPage() {
         style: input.style,
         notes: input.notes,
         referenceFile: input.referenceFile,
-        sourceImageUrl
+        sourceImageUrl,
+        generationMode: input.generationMode ?? "image"
       });
 
       setSelectedAssetId(assetId);
@@ -449,7 +450,8 @@ export function RoomPage() {
         size: baseVersion?.size ?? "1024x1024",
         notes: "",
         referenceFile,
-        sourceImageUrl: referenceFile ? null : baseVersion?.image_url ?? selectedAsset.image_url
+        sourceImageUrl: referenceFile ? null : baseVersion?.image_url ?? selectedAsset.image_url,
+        generationMode: "auto"
       });
     } catch {
       // Error banner is already set by handleGenerate.

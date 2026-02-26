@@ -54,7 +54,8 @@ type ConversationMessage =
       versionLabel: string;
       author: "AI Assistant";
       timestamp: string;
-      imageUrl: string;
+      imageUrl: string | null;
+      responseText: string | null;
       annotations: Annotation[];
       sourceVersion: AssetVersion;
     };
@@ -101,6 +102,8 @@ function GenerationMessage({
   onImageClick: (imageUrl: string) => void;
   onRegenerate: (version: AssetVersion) => void;
 }) {
+  const isImageResponse = Boolean(message.imageUrl);
+
   return (
     <div className="flex items-start gap-3">
       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--primary)_20%,white)]">
@@ -119,52 +122,64 @@ function GenerationMessage({
           ) : null}
         </div>
 
-        <button
-          className="group relative block w-full max-w-2xl overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--muted)] text-left"
-          onClick={() => onImageClick(message.imageUrl)}
-          type="button"
-        >
-          <img alt={`Generated ${message.versionLabel}`} className="h-auto w-full" src={message.imageUrl} />
-
-          {message.annotations.map((annotation) => (
-            <span
-              className="absolute flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-[var(--primary)] text-xs font-medium text-white shadow-lg transition-transform hover:scale-110"
-              key={`${message.id}-ann-${annotation.id}`}
-              style={{
-                left: `${annotation.x_position}%`,
-                top: `${annotation.y_position}%`
+        {isImageResponse ? (
+          <>
+            <button
+              className="group relative block w-full max-w-2xl overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--muted)] text-left"
+              onClick={() => {
+                if (message.imageUrl) {
+                  onImageClick(message.imageUrl);
+                }
               }}
-              title={`Pin ${annotation.number}`}
+              type="button"
             >
-              {annotation.number}
-            </span>
-          ))}
+              <img alt={`Generated ${message.versionLabel}`} className="h-auto w-full" src={message.imageUrl ?? ""} />
 
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition group-hover:bg-black/5 group-hover:opacity-100">
-            <span className="rounded-lg bg-[var(--card)]/95 px-3 py-1.5 text-sm text-[var(--foreground)]">
-              Click to expand
-            </span>
+              {message.annotations.map((annotation) => (
+                <span
+                  className="absolute flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-[var(--primary)] text-xs font-medium text-white shadow-lg transition-transform hover:scale-110"
+                  key={`${message.id}-ann-${annotation.id}`}
+                  style={{
+                    left: `${annotation.x_position}%`,
+                    top: `${annotation.y_position}%`
+                  }}
+                  title={`Pin ${annotation.number}`}
+                >
+                  {annotation.number}
+                </span>
+              ))}
+
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition group-hover:bg-black/5 group-hover:opacity-100">
+                <span className="rounded-lg bg-[var(--card)]/95 px-3 py-1.5 text-sm text-[var(--foreground)]">
+                  Click to expand
+                </span>
+              </div>
+            </button>
+
+            <div className="flex items-center gap-3">
+              <button
+                className="inline-flex items-center gap-1.5 text-xs text-[var(--muted-foreground)] transition hover:text-[var(--foreground)]"
+                onClick={() => onRegenerate(message.sourceVersion)}
+                type="button"
+              >
+                <RotateCw className="h-3.5 w-3.5" />
+                Regenerate
+              </button>
+              <button
+                className="inline-flex items-center gap-1.5 text-xs text-[var(--muted-foreground)] transition hover:text-[var(--foreground)]"
+                onClick={() => onCreateVariant(message.sourceVersion)}
+                type="button"
+              >
+                <ImageIcon className="h-3.5 w-3.5" />
+                Create Variant
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="max-w-2xl rounded-xl border border-[var(--border)] bg-[var(--card)] px-4 py-3 text-sm leading-relaxed text-[var(--foreground)]">
+            {message.responseText ?? "No text response returned."}
           </div>
-        </button>
-
-        <div className="flex items-center gap-3">
-          <button
-            className="inline-flex items-center gap-1.5 text-xs text-[var(--muted-foreground)] transition hover:text-[var(--foreground)]"
-            onClick={() => onRegenerate(message.sourceVersion)}
-            type="button"
-          >
-            <RotateCw className="h-3.5 w-3.5" />
-            Regenerate
-          </button>
-          <button
-            className="inline-flex items-center gap-1.5 text-xs text-[var(--muted-foreground)] transition hover:text-[var(--foreground)]"
-            onClick={() => onCreateVariant(message.sourceVersion)}
-            type="button"
-          >
-            <ImageIcon className="h-3.5 w-3.5" />
-            Create Variant
-          </button>
-        </div>
+        )}
       </div>
     </div>
   );
@@ -363,6 +378,8 @@ export function AssetDetailView({
       const imageUrl = version.image_url ?? (version.id === latestVersionId
         ? asset.image_url
         : placeholderUrl(version.prompt, version.size || "1024x1024"));
+      const outputType = version.output_type ?? "image";
+      const isImageOutput = outputType !== "text";
 
       return [
         {
@@ -383,8 +400,9 @@ export function AssetDetailView({
           versionLabel: version.version,
           author: "AI Assistant",
           timestamp: formatTimestamp(version.created_at),
-          imageUrl,
-          annotations,
+          imageUrl: isImageOutput ? imageUrl : null,
+          responseText: isImageOutput ? null : version.response_text,
+          annotations: isImageOutput ? annotations : [],
           sourceVersion: version
         }
       ];

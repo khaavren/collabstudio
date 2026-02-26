@@ -44,6 +44,8 @@ create table if not exists asset_versions (
   version text not null,
   prompt text not null,
   image_url text,
+  output_type text not null default 'image',
+  response_text text,
   size text not null,
   style text not null,
   notes text,
@@ -52,6 +54,8 @@ create table if not exists asset_versions (
 );
 
 alter table asset_versions add column if not exists image_url text;
+alter table asset_versions add column if not exists output_type text not null default 'image';
+alter table asset_versions add column if not exists response_text text;
 
 -- Backfill any historical "current" version rows with the asset cover image.
 update asset_versions av
@@ -118,6 +122,8 @@ select
   version,
   prompt,
   image_url,
+  output_type,
+  response_text,
   size,
   style,
   notes,

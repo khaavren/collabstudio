@@ -30,6 +30,8 @@ export type AssetVersion = {
   version: string;
   prompt: string;
   image_url: string | null;
+  output_type: "image" | "text";
+  response_text: string | null;
   size: string;
   style: string;
   notes: string | null;
@@ -69,4 +71,5 @@ export type GenerateInput = {
   notes: string;
   referenceFile: File | null;
   sourceImageUrl?: string | null;
+  generationMode?: "image" | "auto";
 };

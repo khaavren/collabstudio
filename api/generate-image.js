@@ -24,6 +24,69 @@ function normalizedSourceImageUrl(value) {
   return null;
 }
 
+function resolveRequestedMode(value) {
+  if (value === "auto" || value === "image" || value === "text") {
+    return value;
+  }
+  return "image";
+}
+
+function inferOutputMode(prompt, requestedMode) {
+  if (requestedMode === "image" || requestedMode === "text") {
+    return requestedMode;
+  }
+
+  const normalized = String(prompt || "").trim().toLowerCase();
+  if (!normalized) return "image";
+
+  const visualSignals = [
+    "generate",
+    "regenerate",
+    "create variant",
+    "new variant",
+    "render",
+    "mockup",
+    "illustration",
+    "concept image",
+    "concept render",
+    "product photo",
+    "photo-real",
+    "make the",
+    "change the",
+    "update the design",
+    "use attached image",
+    "use the attached image",
+    "based on this image",
+    "show me"
+  ];
+
+  if (visualSignals.some((signal) => normalized.includes(signal))) {
+    return "image";
+  }
+
+  const questionStarts = [
+    "what ",
+    "why ",
+    "how ",
+    "which ",
+    "should ",
+    "can ",
+    "could ",
+    "would ",
+    "is ",
+    "are ",
+    "do ",
+    "does ",
+    "compare ",
+    "recommend "
+  ];
+
+  const looksQuestion =
+    normalized.includes("?") || questionStarts.some((entry) => normalized.startsWith(entry));
+
+  return looksQuestion ? "text" : "image";
+}
+
 function parseSize(size) {
   const [widthRaw, heightRaw] = normalizedSize(size).split("x");
   const width = Number.parseInt(widthRaw, 10) || 1024;
@@ -127,6 +190,16 @@ function resolveOpenAiImageModel(model) {
   return "gpt-image-1";
 }
 
+function resolveOpenAiTextModel(model) {
+  const raw = String(model ?? "").trim();
+  const lowered = raw.toLowerCase();
+  if (!raw) return "gpt-4.1-mini";
+  if (lowered.includes("image") || lowered.startsWith("dall-e")) {
+    return "gpt-4.1-mini";
+  }
+  return raw;
+}
+
 function sanitizeOpenAiImageParams(raw) {
   if (!isPlainObject(raw)) return {};
 
@@ -141,6 +214,19 @@ function sanitizeOpenAiImageParams(raw) {
     "user"
   ]);
 
+  const sanitized = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (!allowedKeys.has(key)) continue;
+    sanitized[key] = value;
+  }
+
+  return sanitized;
+}
+
+function sanitizeOpenAiTextParams(raw) {
+  if (!isPlainObject(raw)) return {};
+
+  const allowedKeys = new Set(["temperature", "max_output_tokens", "top_p"]);
   const sanitized = {};
   for (const [key, value] of Object.entries(raw)) {
     if (!allowedKeys.has(key)) continue;
@@ -327,6 +413,27 @@ async function parseNonOkError(response, fallbackMessage) {
   throw new Error(compactErrorText(raw) || fallbackMessage);
 }
 
+function extractTextFromResponsePayload(payload) {
+  if (typeof payload?.output_text === "string" && payload.output_text.trim().length > 0) {
+    return payload.output_text.trim();
+  }
+
+  if (!Array.isArray(payload?.output)) {
+    return null;
+  }
+
+  for (const item of payload.output) {
+    const content = Array.isArray(item?.content) ? item.content : [];
+    for (const entry of content) {
+      if (typeof entry?.text === "string" && entry.text.trim().length > 0) {
+        return entry.text.trim();
+      }
+    }
+  }
+
+  return null;
+}
+
 async function generateOpenAiImage(options) {
   const { apiKey, model, prompt, size, defaultParams, sourceImageUrl } = options;
   const maxAttempts = 2;
@@ -410,6 +517,77 @@ async function generateOpenAiImage(options) {
   }
 
   throw new Error("OpenAI image generation failed after retries.");
+}
+
+async function generateOpenAiText(options) {
+  const { apiKey, model, prompt, defaultParams } = options;
+  const maxAttempts = 2;
+  const resolvedModel = resolveOpenAiTextModel(model);
+  const textParams = sanitizeOpenAiTextParams(defaultParams.openaiText);
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const timeout = withTimeout(60000);
+    try {
+      const response = await fetch("https://api.openai.com/v1/responses", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: resolvedModel,
+          input: [
+            {
+              role: "system",
+              content:
+                "You are an industrial product development assistant. Give practical, concise answers with recommendations and clear assumptions."
+            },
+            {
+              role: "user",
+              content: prompt
+            }
+          ],
+          ...textParams
+        }),
+        signal: timeout.signal
+      });
+
+      if (!response.ok) {
+        const raw = await response.text();
+        throw createOpenAiHttpError(response, raw);
+      }
+
+      const payload = await response.json();
+      const text = extractTextFromResponsePayload(payload);
+      if (!text) {
+        throw new Error("OpenAI returned no text response.");
+      }
+
+      return {
+        responseText: text,
+        modelUsed: resolvedModel
+      };
+    } catch (caughtError) {
+      const retryable =
+        (caughtError instanceof Error && caughtError.retryable === true) ||
+        isRetryableRuntimeError(caughtError);
+      const canRetry = retryable && attempt < maxAttempts - 1;
+
+      if (!canRetry) {
+        if (caughtError instanceof Error && caughtError.name === "AbortError") {
+          throw new Error("OpenAI text request timed out. Please retry.");
+        }
+        throw caughtError;
+      }
+
+      const backoffMs = Math.min(1000 * 2 ** attempt, 8000);
+      await sleep(backoffMs);
+    } finally {
+      timeout.clear();
+    }
+  }
+
+  throw new Error("OpenAI text response failed after retries.");
 }
 
 async function generateGeminiImage(options) {
@@ -693,7 +871,22 @@ async function generateProviderImage(options) {
   throw new Error(`Unsupported provider: ${provider}`);
 }
 
-async function incrementUsage(organizationId) {
+async function generateProviderText(options) {
+  const provider = normalizeProvider(options.provider);
+
+  if (provider === "OpenAI") {
+    return generateOpenAiText(options);
+  }
+
+  return {
+    responseText:
+      `Text assistant replies are not configured for ${provider}. ` +
+      "Ask for an image iteration or switch provider to OpenAI for text-mode chat.",
+    modelUsed: options.model
+  };
+}
+
+async function incrementUsage(organizationId, imageGenerated = true) {
   const adminClient = getSupabaseAdminClient();
   const month = new Date().toISOString().slice(0, 7);
 
@@ -710,7 +903,7 @@ async function incrementUsage(organizationId) {
     await adminClient.from("usage_metrics").insert({
       organization_id: organizationId,
       month,
-      images_generated: 1,
+      images_generated: imageGenerated ? 1 : 0,
       api_calls: 1,
       storage_used_mb: 0
     });
@@ -720,7 +913,7 @@ async function incrementUsage(organizationId) {
   await adminClient
     .from("usage_metrics")
     .update({
-      images_generated: Number(current.images_generated ?? 0) + 1,
+      images_generated: Number(current.images_generated ?? 0) + (imageGenerated ? 1 : 0),
       api_calls: Number(current.api_calls ?? 0) + 1
     })
     .eq("id", current.id);
@@ -734,6 +927,8 @@ export default async function handler(req, res) {
     const prompt = String(body.prompt ?? "").trim();
     const size = normalizedSize(body.size);
     const sourceImageUrl = normalizedSourceImageUrl(body.sourceImageUrl);
+    const requestedMode = resolveRequestedMode(body.mode);
+    const outputMode = inferOutputMode(prompt, requestedMode);
 
     if (!prompt) {
       sendJson(res, 400, { error: "Prompt is required." });
@@ -767,6 +962,30 @@ export default async function handler(req, res) {
           }
 
           const defaultParams = readSafeDefaultParams(apiSetting.default_params);
+          if (outputMode === "text") {
+            const generated = await generateProviderText({
+              provider: providerUsed,
+              model: modelUsed,
+              apiKey: key,
+              prompt,
+              size,
+              sourceImageUrl,
+              defaultParams
+            });
+            modelUsed = generated.modelUsed || modelUsed;
+
+            await incrementUsage(organizationId, false);
+
+            sendJson(res, 200, {
+              outputType: "text",
+              responseText: generated.responseText,
+              configured: true,
+              providerUsed,
+              modelUsed
+            });
+            return;
+          }
+
           const generated = await generateProviderImage({
             provider: providerUsed,
             model: modelUsed,
@@ -778,9 +997,10 @@ export default async function handler(req, res) {
           });
           modelUsed = generated.modelUsed || modelUsed;
 
-          await incrementUsage(organizationId);
+          await incrementUsage(organizationId, true);
 
           sendJson(res, 200, {
+            outputType: "image",
             imageUrl: generated.imageUrl,
             configured: true,
             providerUsed,
@@ -802,13 +1022,29 @@ export default async function handler(req, res) {
       }
     }
 
+    if (outputMode === "text") {
+      if (organizationId) {
+        await incrementUsage(organizationId, false);
+      }
+      sendJson(res, 200, {
+        outputType: "text",
+        responseText:
+          "Text mode requested, but no model API is configured for this studio. Add your provider key in Admin > Model API Configuration.",
+        configured,
+        providerUsed,
+        modelUsed
+      });
+      return;
+    }
+
     const imageUrl = buildPlaceholderUrl(prompt, size, providerUsed, modelUsed);
 
     if (organizationId) {
-      await incrementUsage(organizationId);
+      await incrementUsage(organizationId, true);
     }
 
     sendJson(res, 200, {
+      outputType: "image",
       imageUrl,
       configured,
       providerUsed,
