@@ -78,11 +78,30 @@ function inferOutputMode(prompt, requestedMode) {
     "do ",
     "does ",
     "compare ",
-    "recommend "
+    "recommend ",
+    "suggest ",
+    "list ",
+    "tell me ",
+    "give me ",
+    "help me "
+  ];
+
+  const advisorySignals = [
+    "best 2-3",
+    "best option",
+    "best options",
+    "pros and cons",
+    "tradeoff",
+    "recommendation",
+    "strategy",
+    "packaging and shipping",
+    "package and ship"
   ];
 
   const looksQuestion =
-    normalized.includes("?") || questionStarts.some((entry) => normalized.startsWith(entry));
+    normalized.includes("?") ||
+    questionStarts.some((entry) => normalized.startsWith(entry)) ||
+    advisorySignals.some((entry) => normalized.includes(entry));
 
   return looksQuestion ? "text" : "image";
 }
