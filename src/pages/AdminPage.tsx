@@ -65,14 +65,65 @@ type ApiTestResponse = {
 type AdminTab = "organization" | "account" | "model" | "usage" | "security";
 const WORKSPACE_PATH = "/room/hard-hat-system";
 
-function pickLatestCurrentModels(provider: string, models: string[]) {
-  if (models.length === 0) return [];
-
+function recommendedModelsForProvider(provider: string) {
   const normalizedProvider = normalizeProviderValue(provider);
-  const uniqueModels = Array.from(new Set(models));
+
+  if (normalizedProvider === "OpenAI") {
+    return [
+      "gpt-image-1",
+      "gpt-5.2",
+      "gpt-5.2-mini",
+      "gpt-5",
+      "gpt-5-mini",
+      "gpt-4.1",
+      "gpt-4.1-mini",
+      "gpt-4o",
+      "gpt-4o-mini",
+      "o3",
+      "o4-mini"
+    ];
+  }
+
+  if (normalizedProvider === "Anthropic") {
+    return [
+      "claude-opus-4-1",
+      "claude-opus-4",
+      "claude-sonnet-4",
+      "claude-3-7-sonnet-latest",
+      "claude-3-5-sonnet-latest",
+      "claude-3-5-haiku-latest"
+    ];
+  }
+
+  if (normalizedProvider === "Google Gemini") {
+    return ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"];
+  }
+
+  if (normalizedProvider === "Replicate") {
+    return [
+      "black-forest-labs/flux-schnell",
+      "black-forest-labs/flux-dev",
+      "stability-ai/sdxl",
+      "stability-ai/stable-diffusion"
+    ];
+  }
+
+  if (normalizedProvider === "Stability AI") {
+    return ["stable-image-core", "stable-image-ultra", "sd3", "sdxl"];
+  }
+
+  return [];
+}
+
+function pickLatestCurrentModels(provider: string, models: string[]) {
+  const normalizedProvider = normalizeProviderValue(provider);
+  const seededModels = [...recommendedModelsForProvider(normalizedProvider), ...models];
+  const uniqueModels = Array.from(new Set(seededModels.filter((entry) => entry.trim().length > 0)));
 
   const openAiPreferred = [
     "gpt-image-1",
+    "gpt-5.2",
+    "gpt-5.2-mini",
     "gpt-5",
     "gpt-5-mini",
     "gpt-4.1",
@@ -156,6 +207,16 @@ function pickLatestCurrentModels(provider: string, models: string[]) {
   return uniqueModels.slice(0, 12);
 }
 
+function buildModelOptions(provider: string, discoveredModels: string[], selectedModel: string) {
+  const shortlist = pickLatestCurrentModels(provider, discoveredModels);
+  const selected = selectedModel.trim();
+
+  if (!selected) return shortlist;
+  if (shortlist.includes(selected)) return shortlist;
+
+  return [selected, ...shortlist];
+}
+
 function normalizeProviderValue(value: string) {
   const raw = value.trim().toLowerCase();
   if (!raw) return "OpenAI";
@@ -230,6 +291,8 @@ export function AdminPage() {
   const [testMessage, setTestMessage] = useState<string | null>(null);
   const [modelOptions, setModelOptions] = useState<string[]>([]);
   const [discoveredModelCount, setDiscoveredModelCount] = useState(0);
+  const [hasStoredApiKey, setHasStoredApiKey] = useState(false);
+  const [isEditingApiKey, setIsEditingApiKey] = useState(false);
   const [settings, setSettings] = useState<AdminSettingsResponse | null>(null);
   const [orgForm, setOrgForm] = useState(EMPTY_ORG_FORM);
   const [apiForm, setApiForm] = useState(EMPTY_API_FORM);
@@ -330,8 +393,10 @@ export function AdminPage() {
       defaultImageSize: nextSettings.apiSettings.defaultImageSize || "1024x1024",
       defaultParams: JSON.stringify(nextSettings.apiSettings.defaultParams ?? {}, null, 2)
     });
-    setModelOptions(modelValue ? [modelValue] : []);
-    setDiscoveredModelCount(modelValue ? 1 : 0);
+    setModelOptions(buildModelOptions(providerValue, [], modelValue));
+    setDiscoveredModelCount(0);
+    setHasStoredApiKey(Boolean(nextSettings.apiSettings.configured));
+    setIsEditingApiKey(false);
 
     setTeamRoleDrafts(
       Object.fromEntries(nextSettings.teamMembers.map((member) => [member.id, member.role]))
@@ -419,6 +484,7 @@ export function AdminPage() {
 
       setSettings(payload as AdminSettingsResponse);
       setApiForm((current) => ({ ...current, apiKey: "" }));
+      setIsEditingApiKey(false);
       setLogoFile(null);
       setMessage("Settings saved.");
       await loadSettings();
@@ -588,19 +654,8 @@ export function AdminPage() {
         ? payload.models.filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
         : [];
       setDiscoveredModelCount(nextModels.length);
-
-      if (nextModels.length > 0) {
-        const latestModels = pickLatestCurrentModels(apiForm.provider, nextModels);
-        const shortlist = latestModels.length > 0 ? latestModels : nextModels.slice(0, 12);
-        const selectedModel = (payload.model ?? apiForm.model).trim();
-        setModelOptions(
-          selectedModel && !shortlist.includes(selectedModel)
-            ? [selectedModel, ...shortlist]
-            : shortlist
-        );
-      } else {
-        setModelOptions([]);
-      }
+      const selectedModel = (payload.model ?? apiForm.model).trim();
+      setModelOptions(buildModelOptions(apiForm.provider, nextModels, selectedModel));
 
       if (payload.model) {
         setApiForm((current) => ({
@@ -1075,11 +1130,13 @@ export function AdminPage() {
                       className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-lg"
                       onChange={(event) => {
                         const nextProvider = event.target.value;
+                        const fallbackModels = buildModelOptions(nextProvider, [], "");
                         setApiForm((current) => ({
                           ...current,
-                          provider: nextProvider
+                          provider: nextProvider,
+                          model: current.model.trim().length > 0 ? current.model : fallbackModels[0] ?? ""
                         }));
-                        setModelOptions([]);
+                        setModelOptions(fallbackModels);
                         setDiscoveredModelCount(0);
                         setTestMessage(null);
                       }}
@@ -1121,9 +1178,11 @@ export function AdminPage() {
                     ) : null}
                     <p className="mt-1 text-sm font-normal text-slate-500">
                       {modelOptions.length > 0
-                        ? discoveredModelCount > modelOptions.length
-                          ? `Discovered ${discoveredModelCount} models. Showing ${modelOptions.length} latest current models.`
-                          : `Showing ${modelOptions.length} available models.`
+                        ? discoveredModelCount > 0
+                          ? discoveredModelCount > modelOptions.length
+                            ? `Discovered ${discoveredModelCount} models. Showing ${modelOptions.length} latest current models.`
+                            : `Discovered ${discoveredModelCount} models. Showing ${modelOptions.length} curated options.`
+                          : `Showing ${modelOptions.length} curated model options.`
                         : "Run Test Connection after entering API key to discover available models."}
                     </p>
                   </label>
@@ -1132,11 +1191,37 @@ export function AdminPage() {
                     API Key
                     <input
                       className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-lg"
-                      onChange={(event) => setApiForm((current) => ({ ...current, apiKey: event.target.value }))}
-                      placeholder="Leave blank to keep existing key"
-                      type="password"
-                      value={apiForm.apiKey}
+                      onBlur={() => {
+                        if (hasStoredApiKey && isEditingApiKey && apiForm.apiKey.trim().length === 0) {
+                          setIsEditingApiKey(false);
+                        }
+                      }}
+                      onChange={(event) => {
+                        if (hasStoredApiKey && !isEditingApiKey) {
+                          setIsEditingApiKey(true);
+                        }
+                        setApiForm((current) => ({ ...current, apiKey: event.target.value }));
+                      }}
+                      onFocus={() => {
+                        if (hasStoredApiKey && !isEditingApiKey) {
+                          setIsEditingApiKey(true);
+                        }
+                      }}
+                      placeholder={
+                        hasStoredApiKey && !isEditingApiKey ? "" : "Enter API key (leave blank to keep existing)"
+                      }
+                      type={hasStoredApiKey && !isEditingApiKey ? "text" : "password"}
+                      value={
+                        hasStoredApiKey && !isEditingApiKey ? "••••••••••••••••••••••••••••••••" : apiForm.apiKey
+                      }
                     />
+                    <p className="mt-1 text-sm font-normal text-slate-500">
+                      {hasStoredApiKey
+                        ? isEditingApiKey
+                          ? "Enter a new key to replace the saved key."
+                          : "A key is saved. Click to replace it."
+                        : "No key saved yet."}
+                    </p>
                   </label>
 
                   <label className="text-lg font-medium text-slate-700">
