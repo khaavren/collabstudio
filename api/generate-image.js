@@ -237,12 +237,12 @@ async function parseNonOkError(response, fallbackMessage) {
 
 async function generateOpenAiImage(options) {
   const { apiKey, model, prompt, size, defaultParams } = options;
-  const maxAttempts = 5;
+  const maxAttempts = 3;
   const resolvedModel = resolveOpenAiImageModel(model);
   const openAiParams = sanitizeOpenAiImageParams(defaultParams.openai);
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    const timeout = withTimeout();
+    const timeout = withTimeout(20000);
     try {
       const response = await fetch("https://api.openai.com/v1/images/generations", {
         method: "POST",

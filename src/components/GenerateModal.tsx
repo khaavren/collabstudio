@@ -43,9 +43,14 @@ export function GenerateModal({
     if (!form.prompt.trim()) return;
 
     setIsSubmitting(true);
-    await onGenerate(form);
-    setIsSubmitting(false);
-    onClose();
+    try {
+      await onGenerate(form);
+      onClose();
+    } catch {
+      // Parent handles displaying error state.
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (

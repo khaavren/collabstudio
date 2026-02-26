@@ -408,7 +408,9 @@ export function RoomPage() {
       setGeneratePreset(defaultGenerate);
       setError(null);
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : "Generation failed.");
+      const message = caughtError instanceof Error ? caughtError.message : "Generation failed.";
+      setError(message);
+      throw new Error(message);
     }
   }
 
@@ -431,14 +433,18 @@ export function RoomPage() {
       versions[0] ??
       null;
 
-    await handleGenerate({
-      title: selectedAsset.title,
-      prompt,
-      style: baseVersion?.style ?? "Product Photography",
-      size: baseVersion?.size ?? "1024x1024",
-      notes: "",
-      referenceFile: null
-    });
+    try {
+      await handleGenerate({
+        title: selectedAsset.title,
+        prompt,
+        style: baseVersion?.style ?? "Product Photography",
+        size: baseVersion?.size ?? "1024x1024",
+        notes: "",
+        referenceFile: null
+      });
+    } catch {
+      // Error banner is already set by handleGenerate.
+    }
   }
 
   async function handleAssetUpdate(updatedAsset: {

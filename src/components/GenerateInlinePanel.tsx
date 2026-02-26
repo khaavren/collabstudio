@@ -38,14 +38,19 @@ export function GenerateInlinePanel({
     if (!form.prompt.trim()) return;
 
     setIsSubmitting(true);
-    await onGenerate(form);
-    setForm((current) => ({
-      ...current,
-      prompt: "",
-      notes: "",
-      referenceFile: null
-    }));
-    setIsSubmitting(false);
+    try {
+      await onGenerate(form);
+      setForm((current) => ({
+        ...current,
+        prompt: "",
+        notes: "",
+        referenceFile: null
+      }));
+    } catch {
+      // Parent handles displaying error state.
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (

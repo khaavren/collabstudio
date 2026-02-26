@@ -248,13 +248,18 @@ async function requestGeneratedImage(prompt: string, size: string) {
   } = await supabase.auth.getSession();
 
   try {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 65000);
     const response = await fetch("/api/generate-image", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {})
       },
-      body: JSON.stringify({ prompt, size })
+      body: JSON.stringify({ prompt, size }),
+      signal: controller.signal
+    }).finally(() => {
+      window.clearTimeout(timeout);
     });
     const payload = (await response.json().catch(() => ({}))) as {
       configured?: boolean;
@@ -280,6 +285,9 @@ async function requestGeneratedImage(prompt: string, size: string) {
 
     throw new Error("Image generation returned no image URL.");
   } catch (caughtError) {
+    if (caughtError instanceof Error && caughtError.name === "AbortError") {
+      throw new Error("Image generation timed out. Please retry.");
+    }
     throw new Error(
       caughtError instanceof Error
         ? caughtError.message
@@ -292,7 +300,11 @@ async function uploadImageToStorage(prompt: string, size: string, file?: File | 
   const blob = file
     ? file
     : await requestGeneratedImage(prompt, size).then(async (generatedUrl) => {
-        const response = await fetch(generatedUrl);
+        const controller = new AbortController();
+        const timeout = window.setTimeout(() => controller.abort(), 30000);
+        const response = await fetch(generatedUrl, { signal: controller.signal }).finally(() => {
+          window.clearTimeout(timeout);
+        });
         if (!response.ok) {
           throw new Error("Failed to generate placeholder image.");
         }
