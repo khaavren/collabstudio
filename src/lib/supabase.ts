@@ -152,6 +152,32 @@ export async function createRoom(name: string, slug: string) {
   throw new Error("Unable to create room after multiple slug attempts.");
 }
 
+export async function updateRoomName(roomId: string, name: string) {
+  const { data, error } = await supabase
+    .from("rooms")
+    .update({
+      name,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", roomId)
+    .select("*")
+    .single();
+
+  if (error || !data) {
+    throw new Error(toUserErrorMessage(error ?? new Error("Unable to update room.")));
+  }
+
+  return data as Room;
+}
+
+export async function deleteRoom(roomId: string) {
+  const { error } = await supabase.from("rooms").delete().eq("id", roomId);
+
+  if (error) {
+    throw new Error(toUserErrorMessage(error));
+  }
+}
+
 export async function fetchAssetsForRoom(roomId: string) {
   const { data: assets, error: assetsError } = await supabase
     .from("assets")

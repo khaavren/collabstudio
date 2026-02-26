@@ -8,6 +8,8 @@ import type { Room } from "@/lib/types";
 type SidebarProps = {
   activeSlug: string;
   onCreateRoom: () => void;
+  onDeleteRoom: (room: Room) => Promise<boolean> | boolean;
+  onRenameRoom: (room: Room, name: string) => Promise<boolean> | boolean;
   onSelectRoom: (slug: string) => void;
   rooms: Room[];
   workspaceName?: string;
@@ -18,6 +20,8 @@ type SidebarProps = {
 export function Sidebar({
   activeSlug,
   onCreateRoom,
+  onDeleteRoom,
+  onRenameRoom,
   onSelectRoom,
   rooms,
   workspaceName = "Workspace",
@@ -28,20 +32,16 @@ export function Sidebar({
   const { logout } = useAuth();
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);
   const [hoveredRoomId, setHoveredRoomId] = useState<string | null>(null);
-  const [roomNameOverrides, setRoomNameOverrides] = useState<Record<string, string>>({});
   const avatarLetter = userName.trim().charAt(0).toUpperCase() || "U";
 
-  function handleSaveRoom(newName: string) {
-    if (!editingRoom) return;
-
-    setRoomNameOverrides((current) => ({
-      ...current,
-      [editingRoom.id]: newName
-    }));
+  async function handleSaveRoom(newName: string) {
+    if (!editingRoom) return false;
+    return onRenameRoom(editingRoom, newName);
   }
 
-  function getRoomName(room: Room) {
-    return roomNameOverrides[room.id] ?? room.name;
+  async function handleDeleteRoom() {
+    if (!editingRoom) return false;
+    return onDeleteRoom(editingRoom);
   }
 
   function handleLogout() {
@@ -84,7 +84,7 @@ export function Sidebar({
                   onClick={() => onSelectRoom(room.slug)}
                   type="button"
                 >
-                  {getRoomName(room)}
+                  {room.name}
                 </button>
 
                 {hoveredRoomId === room.id ? (
@@ -93,10 +93,7 @@ export function Sidebar({
                     onClick={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
-                      setEditingRoom({
-                        ...room,
-                        name: getRoomName(room)
-                      });
+                      setEditingRoom(room);
                     }}
                     title="Edit room"
                     type="button"
@@ -162,6 +159,7 @@ export function Sidebar({
       </aside>
 
       <EditRoomModal
+        onDelete={handleDeleteRoom}
         isOpen={editingRoom !== null}
         onClose={() => setEditingRoom(null)}
         onSave={handleSaveRoom}

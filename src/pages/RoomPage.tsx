@@ -11,6 +11,7 @@ import {
   addComment,
   type ActorProfile,
   createRoom,
+  deleteRoom,
   deleteAssetCascade,
   ensureAnonSession,
   fetchAssetDetails,
@@ -20,6 +21,7 @@ import {
   getCurrentActorProfile,
   isSupabaseConfigured,
   supabase,
+  updateRoomName,
   updateAssetMetadata
 } from "@/lib/supabase";
 import { getWorkspaceNameById } from "@/lib/workspaces";
@@ -306,6 +308,82 @@ export function RoomPage() {
     }
   }
 
+  async function handleRenameRoom(targetRoom: Room, name: string) {
+    const nextName = name.trim();
+    if (!nextName) return false;
+    if (nextName === targetRoom.name) return true;
+
+    const previousRooms = rooms;
+    setRooms((current) =>
+      current.map((room) =>
+        room.id === targetRoom.id
+          ? {
+              ...room,
+              name: nextName,
+              updated_at: new Date().toISOString()
+            }
+          : room
+      )
+    );
+
+    try {
+      await updateRoomName(targetRoom.id, nextName);
+      setError(null);
+      return true;
+    } catch (caughtError) {
+      setRooms(previousRooms);
+      setError(caughtError instanceof Error ? caughtError.message : "Unable to update room.");
+      return false;
+    }
+  }
+
+  async function handleDeleteRoom(targetRoom: Room) {
+    const confirmed = window.confirm(
+      `Delete room "${targetRoom.name}"? This also deletes all projects in this room.`
+    );
+    if (!confirmed) {
+      return false;
+    }
+
+    const previousRooms = rooms;
+    const deletingActiveRoom = targetRoom.slug === activeRoomSlug;
+    const nextRooms = previousRooms.filter((room) => room.id !== targetRoom.id);
+    const previousPath = activeWorkspaceId
+      ? `/workspace/${activeWorkspaceId}/room/${activeRoomSlug}`
+      : `/room/${activeRoomSlug}`;
+
+    setRooms(nextRooms);
+
+    if (deletingActiveRoom) {
+      setSelectedAssetId(null);
+      setActiveVersionId(null);
+      setAssets([]);
+      setVersions([]);
+      setAnnotations([]);
+      setComments([]);
+
+      if (nextRooms.length > 0) {
+        const nextPath = activeWorkspaceId
+          ? `/workspace/${activeWorkspaceId}/room/${nextRooms[0].slug}`
+          : `/room/${nextRooms[0].slug}`;
+        navigate(nextPath, { replace: true });
+      }
+    }
+
+    try {
+      await deleteRoom(targetRoom.id);
+      setError(null);
+      return true;
+    } catch (caughtError) {
+      setRooms(previousRooms);
+      if (deletingActiveRoom) {
+        navigate(previousPath, { replace: true });
+      }
+      setError(caughtError instanceof Error ? caughtError.message : "Unable to delete room.");
+      return false;
+    }
+  }
+
   async function handleGenerate(input: GenerateInput) {
     if (!activeRoom) return;
 
@@ -452,6 +530,8 @@ export function RoomPage() {
       <Sidebar
         activeSlug={activeRoomSlug}
         onCreateRoom={handleCreateRoom}
+        onDeleteRoom={handleDeleteRoom}
+        onRenameRoom={handleRenameRoom}
         onSelectRoom={(slug) => {
           const nextPath = activeWorkspaceId
             ? `/workspace/${activeWorkspaceId}/room/${slug}`

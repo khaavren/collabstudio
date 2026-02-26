@@ -5,12 +5,14 @@ type EditRoomModalProps = {
   isOpen: boolean;
   roomName: string;
   onClose: () => void;
-  onSave: (newName: string) => void;
+  onDelete: () => Promise<boolean> | boolean;
+  onSave: (newName: string) => Promise<boolean> | boolean;
 };
 
-export function EditRoomModal({ isOpen, onClose, onSave, roomName }: EditRoomModalProps) {
+export function EditRoomModal({ isOpen, onClose, onDelete, onSave, roomName }: EditRoomModalProps) {
   const [value, setValue] = useState(roomName);
   const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -18,6 +20,7 @@ export function EditRoomModal({ isOpen, onClose, onSave, roomName }: EditRoomMod
 
     setValue(roomName);
     setError(null);
+    setIsSubmitting(false);
 
     const frame = requestAnimationFrame(() => {
       inputRef.current?.focus();
@@ -29,8 +32,9 @@ export function EditRoomModal({ isOpen, onClose, onSave, roomName }: EditRoomMod
 
   if (!isOpen) return null;
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (isSubmitting) return;
 
     const trimmed = value.trim();
     if (!trimmed) {
@@ -38,8 +42,29 @@ export function EditRoomModal({ isOpen, onClose, onSave, roomName }: EditRoomMod
       return;
     }
 
-    onSave(trimmed);
-    onClose();
+    setIsSubmitting(true);
+    try {
+      const ok = await onSave(trimmed);
+      if (ok !== false) {
+        onClose();
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (isSubmitting) return;
+
+    setIsSubmitting(true);
+    try {
+      const ok = await onDelete();
+      if (ok !== false) {
+        onClose();
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -78,17 +103,29 @@ export function EditRoomModal({ isOpen, onClose, onSave, roomName }: EditRoomMod
 
           <div className="flex items-center justify-end gap-3">
             <button
+              className="mr-auto text-sm text-[#9d4d3d] transition hover:underline disabled:opacity-60"
+              disabled={isSubmitting}
+              onClick={() => {
+                void handleDelete();
+              }}
+              type="button"
+            >
+              Delete Room
+            </button>
+            <button
               className="text-sm text-[var(--muted-foreground)]"
+              disabled={isSubmitting}
               onClick={onClose}
               type="button"
             >
               Cancel
             </button>
             <button
-              className="rounded-lg bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white"
+              className="rounded-lg bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+              disabled={isSubmitting}
               type="submit"
             >
-              Save
+              {isSubmitting ? "Saving..." : "Save"}
             </button>
           </div>
         </form>
