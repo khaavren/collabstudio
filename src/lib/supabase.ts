@@ -350,53 +350,18 @@ function dataUrlToBlob(dataUrl: string) {
   return new Blob([bytes], { type: mimeType });
 }
 
-async function uploadImageToStorage(
-  prompt: string,
-  size: string,
-  file?: File | null,
-  sourceImageUrl?: string | null,
-  generationMode: "image" | "auto" = "image"
-): Promise<GeneratedOutput> {
-  const generated = file
-    ? null
-    : await requestGeneratedOutput(prompt, size, sourceImageUrl, generationMode);
+function extensionFromMimeType(mimeType: string) {
+  const normalized = mimeType.toLowerCase();
+  if (normalized.includes("png")) return "png";
+  if (normalized.includes("webp")) return "webp";
+  if (normalized.includes("gif")) return "gif";
+  if (normalized.includes("jpeg") || normalized.includes("jpg")) return "jpg";
+  return "jpg";
+}
 
-  if (generated?.outputType === "text") {
-    return generated;
-  }
-
-  const blob = file
-    ? file
-    : await (async () => {
-        const generatedUrl = generated?.imageUrl;
-        if (!generatedUrl) {
-          throw new Error("Image generation returned no image URL.");
-        }
-
-        if (generatedUrl.startsWith("data:image/")) {
-          return dataUrlToBlob(generatedUrl);
-        }
-
-        const controller = new AbortController();
-        const timeout = window.setTimeout(() => controller.abort(), 90000);
-        const response = await fetch(generatedUrl, { signal: controller.signal })
-          .finally(() => {
-            window.clearTimeout(timeout);
-          })
-          .catch((caughtError) => {
-            if (caughtError instanceof Error && caughtError.name === "AbortError") {
-              throw new Error("Generated image download timed out. Please retry.");
-            }
-            throw caughtError;
-          });
-        if (!response.ok) {
-          throw new Error("Failed to fetch generated image.");
-        }
-
-        return response.blob();
-      })();
-
-  const filename = `${crypto.randomUUID()}.jpg`;
+async function uploadBlobToStorage(blob: Blob, prefix = "generated") {
+  const extension = extensionFromMimeType(blob.type || "image/jpeg");
+  const filename = `${prefix}/${crypto.randomUUID()}.${extension}`;
 
   const { error } = await supabase.storage.from("asset-images").upload(filename, blob, {
     contentType: blob.type || "image/jpeg",
@@ -406,9 +371,62 @@ async function uploadImageToStorage(
   if (error) throw new Error(toUserErrorMessage(error));
 
   const { data } = supabase.storage.from("asset-images").getPublicUrl(filename);
+  return data.publicUrl;
+}
+
+async function uploadImageToStorage(
+  prompt: string,
+  size: string,
+  file?: File | null,
+  sourceImageUrl?: string | null,
+  generationMode: "image" | "auto" = "image"
+): Promise<GeneratedOutput> {
+  const uploadedReferenceUrl = file ? await uploadBlobToStorage(file, "references") : null;
+  const resolvedSourceImageUrl = uploadedReferenceUrl ?? sourceImageUrl;
+  const generated = file
+    ? null
+    : await requestGeneratedOutput(prompt, size, resolvedSourceImageUrl, generationMode);
+
+  const generatedResult =
+    generated ??
+    (await requestGeneratedOutput(prompt, size, resolvedSourceImageUrl, generationMode));
+
+  if (generatedResult.outputType === "text") {
+    return generatedResult;
+  }
+
+  const blob = await (async () => {
+    const generatedUrl = generatedResult.imageUrl;
+    if (!generatedUrl) {
+      throw new Error("Image generation returned no image URL.");
+    }
+
+    if (generatedUrl.startsWith("data:image/")) {
+      return dataUrlToBlob(generatedUrl);
+    }
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 90000);
+    const response = await fetch(generatedUrl, { signal: controller.signal })
+      .finally(() => {
+        window.clearTimeout(timeout);
+      })
+      .catch((caughtError) => {
+        if (caughtError instanceof Error && caughtError.name === "AbortError") {
+          throw new Error("Generated image download timed out. Please retry.");
+        }
+        throw caughtError;
+      });
+    if (!response.ok) {
+      throw new Error("Failed to fetch generated image.");
+    }
+
+    return response.blob();
+  })();
+
   return {
     outputType: "image",
-    imageUrl: data.publicUrl
+    imageUrl: await uploadBlobToStorage(blob, "generated")
   };
 }
 
