@@ -1,14 +1,17 @@
 import {
+  ChevronDown,
   Clock,
   FolderTree,
   History,
+  LogOut,
   MessageSquare,
   Pencil,
   Plus,
   Sparkles,
+  UserCircle2,
   Users
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/app/context/auth-context";
 import { EditWorkspaceModal } from "@/components/EditWorkspaceModal";
@@ -62,8 +65,10 @@ function activityIcon(type: Activity["type"]) {
 
 export function Dashboard() {
   const { logout, user } = useAuth();
+  const menuRef = useRef<HTMLDivElement>(null);
   const [workspaces, setWorkspaces] = useState<WorkspaceRecord[]>(() => loadWorkspaces());
   const [editingWorkspace, setEditingWorkspace] = useState<WorkspaceRecord | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const currentUserId = user?.id ?? "1";
   const currentUserName = user?.name ?? "John Doe";
@@ -119,6 +124,28 @@ export function Dashboard() {
     saveWorkspaces(workspaces);
   }, [workspaces]);
 
+  useEffect(() => {
+    function handleOutsideClick(event: MouseEvent) {
+      if (!menuRef.current) return;
+      if (!menuRef.current.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setMenuOpen(false);
+      }
+    }
+
+    window.addEventListener("mousedown", handleOutsideClick);
+    window.addEventListener("keydown", handleEscape);
+    return () => {
+      window.removeEventListener("mousedown", handleOutsideClick);
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, []);
+
   function handleSaveWorkspace(next: { name: string; description: string }) {
     if (!editingWorkspace) return;
 
@@ -159,18 +186,52 @@ export function Dashboard() {
           </div>
 
           <div className="flex items-center gap-4">
-            <button
-              className="text-sm text-[var(--muted-foreground)] transition hover:text-[var(--foreground)]"
-              onClick={logout}
-              type="button"
-            >
-              Logout
-            </button>
-            <div className="flex items-center gap-2">
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--muted)] text-xs font-medium text-[var(--foreground)]">
-                {user?.initials ?? "JD"}
-              </span>
-              <span className="text-sm text-[var(--foreground)]">{currentUserName}</span>
+            <div className="relative" ref={menuRef}>
+              <button
+                aria-expanded={menuOpen}
+                aria-haspopup="menu"
+                className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--card)] px-1.5 py-1 text-[var(--muted-foreground)] transition hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
+                onClick={() => setMenuOpen((current) => !current)}
+                type="button"
+              >
+                {user?.avatarUrl ? (
+                  <img alt={currentUserName} className="h-7 w-7 rounded-full object-cover" src={user.avatarUrl} />
+                ) : (
+                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[var(--accent)] text-xs font-medium text-[var(--foreground)]">
+                    {user?.initials ?? "U"}
+                  </span>
+                )}
+                <ChevronDown className="h-3.5 w-3.5" />
+              </button>
+
+              {menuOpen ? (
+                <div
+                  className="absolute right-0 top-full z-20 mt-2 w-56 rounded-lg border border-[var(--border)] bg-[var(--card)] p-1.5 shadow-sm"
+                  role="menu"
+                >
+                  <div className="mb-1 rounded-md px-2 py-1.5 text-xs text-[var(--muted-foreground)]">
+                    {currentUserName}
+                  </div>
+                  <Link
+                    className="flex items-center gap-2 rounded-md px-2 py-2 text-sm text-[var(--foreground)] transition hover:bg-[var(--accent)]"
+                    onClick={() => setMenuOpen(false)}
+                    role="menuitem"
+                    to="/settings/profile"
+                  >
+                    <UserCircle2 className="h-4 w-4" />
+                    Profile
+                  </Link>
+                  <button
+                    className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-[var(--foreground)] transition hover:bg-[var(--accent)]"
+                    onClick={logout}
+                    role="menuitem"
+                    type="button"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    Sign out
+                  </button>
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
