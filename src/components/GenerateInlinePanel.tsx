@@ -69,7 +69,7 @@ export function GenerateInlinePanel({
           <input
             className="mt-1 w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm outline-none"
             onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
-            placeholder="Band Joes Hard Hat Tri-Mount™"
+            placeholder="Enter project title"
             value={form.title}
           />
         </label>
@@ -79,6 +79,7 @@ export function GenerateInlinePanel({
           <textarea
             className="mt-1 min-h-28 w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm outline-none"
             onChange={(event) => setForm((current) => ({ ...current, prompt: event.target.value }))}
+            placeholder="Describe the concept to generate"
             rows={4}
             value={form.prompt}
           />
@@ -119,7 +120,7 @@ export function GenerateInlinePanel({
           <input
             className="mt-1 w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm outline-none"
             onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))}
-            placeholder="Optional notes"
+            placeholder="Add optional notes"
             value={form.notes}
           />
         </label>

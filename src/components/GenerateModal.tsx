@@ -63,25 +63,26 @@ export function GenerateModal({
         </header>
 
         <form className="space-y-4" onSubmit={handleSubmit}>
-          <label className="block text-sm text-[var(--foreground)]">
-            Project title
-            <input
-              className="mt-1 w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm outline-none"
-              onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
-              placeholder="Band Joes Hard Hat Tri-Mount™"
-              value={form.title}
-            />
-          </label>
+        <label className="block text-sm text-[var(--foreground)]">
+          Project title
+          <input
+            className="mt-1 w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm outline-none"
+            onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
+            placeholder="Enter project title"
+            value={form.title}
+          />
+        </label>
 
           <label className="block text-sm text-[var(--foreground)]">
             Prompt
-            <textarea
-              className="mt-1 min-h-28 w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm outline-none"
-              onChange={(event) => setForm((current) => ({ ...current, prompt: event.target.value }))}
-              rows={4}
-              value={form.prompt}
-            />
-          </label>
+          <textarea
+            className="mt-1 min-h-28 w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm outline-none"
+            onChange={(event) => setForm((current) => ({ ...current, prompt: event.target.value }))}
+            placeholder="Describe the concept to generate"
+            rows={4}
+            value={form.prompt}
+          />
+        </label>
 
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block text-sm text-[var(--foreground)]">
@@ -115,13 +116,13 @@ export function GenerateModal({
 
           <label className="block text-sm text-[var(--foreground)]">
             Notes (optional)
-            <input
-              className="mt-1 w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm outline-none"
-              onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))}
-              placeholder="Optional notes"
-              value={form.notes}
-            />
-          </label>
+          <input
+            className="mt-1 w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm outline-none"
+            onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))}
+            placeholder="Add optional notes"
+            value={form.notes}
+          />
+        </label>
 
           <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-[var(--border)] bg-[var(--background)] px-3 py-4 text-sm text-[var(--muted-foreground)]">
             <Upload className="h-4 w-4" />
