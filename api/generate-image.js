@@ -87,6 +87,30 @@ function inferOutputMode(prompt, requestedMode) {
   return looksQuestion ? "text" : "image";
 }
 
+function shouldAllowFullRedesign(prompt) {
+  const normalized = String(prompt || "").toLowerCase();
+  const redesignSignals = [
+    "redesign",
+    "completely new",
+    "start over",
+    "from scratch",
+    "ignore reference",
+    "different concept",
+    "new concept",
+    "reimagine"
+  ];
+  return redesignSignals.some((signal) => normalized.includes(signal));
+}
+
+function buildEditPrompt(prompt) {
+  return [
+    "Use the provided image as the base.",
+    "Preserve overall composition, camera angle, product geometry, background, and lighting.",
+    "Apply only the requested modification unless explicitly asked to redesign.",
+    `Requested change: ${prompt}`
+  ].join(" ");
+}
+
 function parseSize(size) {
   const [widthRaw, heightRaw] = normalizedSize(size).split("x");
   const width = Number.parseInt(widthRaw, 10) || 1024;
@@ -440,6 +464,8 @@ async function generateOpenAiImage(options) {
   const resolvedModel = resolveOpenAiImageModel(model);
   const openAiParams = sanitizeOpenAiImageParams(defaultParams.openai);
   const sourceImage = normalizedSourceImageUrl(sourceImageUrl);
+  const editPrompt =
+    sourceImage && !shouldAllowFullRedesign(prompt) ? buildEditPrompt(prompt) : prompt;
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const timeout = withTimeout(60000);
@@ -450,7 +476,7 @@ async function generateOpenAiImage(options) {
             const filename = `source.${extensionFromMimeType(source.mimeType)}`;
             const formData = new FormData();
             formData.append("model", resolvedModel);
-            formData.append("prompt", prompt);
+            formData.append("prompt", editPrompt);
             formData.append("size", size);
             formData.append("image", new Blob([source.bytes], { type: source.mimeType }), filename);
             for (const [key, value] of Object.entries(openAiParams)) {
@@ -474,7 +500,7 @@ async function generateOpenAiImage(options) {
             },
             body: JSON.stringify({
               model: resolvedModel,
-              prompt,
+              prompt: editPrompt,
               size,
               ...openAiParams
             }),
