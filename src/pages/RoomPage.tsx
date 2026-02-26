@@ -571,26 +571,28 @@ export function RoomPage() {
               setActiveVersionId(null);
             }}
             onCreateVariant={(version) => {
-              setGeneratePreset({
+              void handleGenerate({
                 title: selectedAsset.title,
                 prompt: `${version.prompt}\n\nCreate a close variant with subtle improvements.`,
                 style: version.style,
                 size: version.size,
                 notes: version.notes ?? "",
                 referenceFile: null
+              }).catch(() => {
+                // Error banner is already set by handleGenerate.
               });
-              setIsGenerateOpen(true);
             }}
             onRegenerate={(version) => {
-              setGeneratePreset({
+              void handleGenerate({
                 title: selectedAsset.title,
                 prompt: version.prompt,
                 style: version.style,
                 size: version.size,
                 notes: version.notes ?? "",
                 referenceFile: null
+              }).catch(() => {
+                // Error banner is already set by handleGenerate.
               });
-              setIsGenerateOpen(true);
             }}
             onSelectVersion={setActiveVersionId}
             onSendPrompt={handleSendPrompt}
