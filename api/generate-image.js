@@ -58,18 +58,7 @@ export default async function handler(req, res) {
 
     const adminClient = getSupabaseAdminClient();
     const membership = await resolveMembership(req);
-    let organizationId = membership?.organization_id ?? null;
-
-    if (!organizationId) {
-      const { data: firstOrg } = await adminClient
-        .from("organizations")
-        .select("id")
-        .order("created_at", { ascending: true })
-        .limit(1)
-        .maybeSingle();
-
-      organizationId = firstOrg?.id ?? null;
-    }
+    const organizationId = membership?.organization_id ?? null;
 
     let configured = false;
     let providerUsed = "Placeholder";

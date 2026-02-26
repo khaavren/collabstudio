@@ -27,6 +27,124 @@ function slugify(value) {
     .slice(0, 60);
 }
 
+function getUserMetadata(user) {
+  return user?.user_metadata && typeof user.user_metadata === "object" ? user.user_metadata : {};
+}
+
+function firstNonEmptyString(...values) {
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    const trimmed = value.trim();
+    if (trimmed.length > 0) return trimmed;
+  }
+  return null;
+}
+
+function membershipRoleRank(role) {
+  if (role === "admin") return 0;
+  if (role === "editor") return 1;
+  if (role === "viewer") return 2;
+  return 3;
+}
+
+function choosePreferredMembership(memberships) {
+  if (!Array.isArray(memberships) || memberships.length === 0) return null;
+
+  const ranked = [...memberships].sort((left, right) => {
+    const roleDiff = membershipRoleRank(left.role) - membershipRoleRank(right.role);
+    if (roleDiff !== 0) return roleDiff;
+
+    const leftCreated = String(left.created_at ?? "");
+    const rightCreated = String(right.created_at ?? "");
+    return leftCreated.localeCompare(rightCreated);
+  });
+
+  return ranked[0] ?? null;
+}
+
+function getStudioDefaultsForUser(user) {
+  const metadata = getUserMetadata(user);
+  const emailHandle =
+    typeof user.email === "string" && user.email.includes("@")
+      ? user.email.split("@")[0]
+      : `user-${String(user.id ?? "").slice(0, 8)}`;
+
+  const identity = firstNonEmptyString(
+    metadata.full_name,
+    metadata.name,
+    metadata.display_name,
+    metadata.preferred_username,
+    emailHandle
+  );
+
+  const baseIdentity = identity ?? `user-${String(user.id ?? "").slice(0, 8)}`;
+  const baseName = `${baseIdentity} Studio`;
+  const baseSlug = slugify(baseIdentity) || `studio-${String(user.id ?? "").slice(0, 8)}`;
+
+  return {
+    name: baseName,
+    slug: baseSlug
+  };
+}
+
+async function loadMembershipsForUser(userId) {
+  const adminClient = getSupabaseAdminClient();
+  const { data, error } = await adminClient
+    .from("team_members")
+    .select("id, organization_id, role, created_at")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    throw new HttpError(error.message, 500);
+  }
+
+  return Array.isArray(data) ? data : [];
+}
+
+async function loadOrganizationById(organizationId) {
+  const adminClient = getSupabaseAdminClient();
+  const { data, error } = await adminClient
+    .from("organizations")
+    .select("*")
+    .eq("id", organizationId)
+    .maybeSingle();
+
+  if (error) {
+    throw new HttpError(error.message, 500);
+  }
+
+  return data ?? null;
+}
+
+async function createOrganizationForUser(user) {
+  const adminClient = getSupabaseAdminClient();
+  const defaults = getStudioDefaultsForUser(user);
+
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const slug = attempt === 0 ? defaults.slug : `${defaults.slug}-${attempt + 1}`;
+    const payload = {
+      name: defaults.name,
+      slug,
+      contact_email: user.email ?? null
+    };
+
+    const { data, error } = await adminClient.from("organizations").insert(payload).select("*").single();
+
+    if (!error && data) {
+      return data;
+    }
+
+    if (error?.code === "23505") {
+      continue;
+    }
+
+    throw new HttpError(error?.message ?? "Failed to create organization.", 500);
+  }
+
+  throw new HttpError("Failed to create a unique organization slug.", 500);
+}
+
 export function isAdminEmail(email) {
   if (!email) return false;
   const admins = parseAdminEmails();
@@ -51,83 +169,42 @@ export async function getAuthenticatedUser(req) {
 }
 
 export async function getPrimaryMembership(userId) {
-  const adminClient = getSupabaseAdminClient();
-  const { data, error } = await adminClient
-    .from("team_members")
-    .select("id, organization_id, role, created_at")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-
-  if (error) {
-    throw new HttpError(error.message, 500);
-  }
-
-  return data ?? null;
+  const memberships = await loadMembershipsForUser(userId);
+  return choosePreferredMembership(memberships);
 }
 
 async function ensureOrganizationAndMembership(user) {
   const adminClient = getSupabaseAdminClient();
+  const memberships = await loadMembershipsForUser(user.id);
+  const preferredAdminMembership = memberships.find((entry) => entry.role === "admin") ?? null;
 
-  const { data: firstOrganization, error: orgError } = await adminClient
-    .from("organizations")
-    .select("*")
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-
-  if (orgError) {
-    throw new HttpError(orgError.message, 500);
-  }
-
-  let organization = firstOrganization;
-
-  if (!organization) {
-    const baseName = "Band Joes Studio";
-    const slug = `${slugify(baseName)}-${Date.now().toString(36)}`;
-
-    const { data: createdOrg, error: createError } = await adminClient
-      .from("organizations")
-      .insert({
-        name: baseName,
-        slug,
-        contact_email: user.email ?? null
-      })
-      .select("*")
-      .single();
-
-    if (createError || !createdOrg) {
-      throw new HttpError(createError?.message ?? "Failed to create organization.", 500);
+  if (preferredAdminMembership) {
+    const organization = await loadOrganizationById(preferredAdminMembership.organization_id);
+    if (!organization) {
+      throw new HttpError("Organization not found for admin membership.", 500);
     }
 
-    organization = createdOrg;
+    return {
+      organization,
+      membership: preferredAdminMembership
+    };
   }
 
-  const { error: upsertError } = await adminClient.from("team_members").upsert(
-    {
-      organization_id: organization.id,
-      user_id: user.id,
-      role: "admin"
-    },
-    {
-      onConflict: "organization_id,user_id"
-    }
-  );
+  const organization = await createOrganizationForUser(user);
 
-  if (upsertError) {
-    throw new HttpError(upsertError.message, 500);
+  const { error: insertError } = await adminClient.from("team_members").insert({
+    organization_id: organization.id,
+    user_id: user.id,
+    role: "admin"
+  });
+
+  if (insertError) {
+    throw new HttpError(insertError.message, 500);
   }
 
-  const { data: membership, error: membershipError } = await adminClient
-    .from("team_members")
-    .select("id, organization_id, role, created_at")
-    .eq("organization_id", organization.id)
-    .eq("user_id", user.id)
-    .single();
-
-  if (membershipError || !membership) {
-    throw new HttpError(membershipError?.message ?? "Unable to resolve membership.", 500);
+  const membership = await getPrimaryMembership(user.id);
+  if (!membership || membership.organization_id !== organization.id) {
+    throw new HttpError("Unable to resolve organization membership.", 500);
   }
 
   return {
@@ -138,11 +215,6 @@ async function ensureOrganizationAndMembership(user) {
 
 export async function requireAdmin(req) {
   const user = await getAuthenticatedUser(req);
-
-  if (!isAdminEmail(user.email)) {
-    throw new HttpError("Not authorized", 403);
-  }
-
   const { organization, membership } = await ensureOrganizationAndMembership(user);
 
   if (membership.role !== "admin") {
