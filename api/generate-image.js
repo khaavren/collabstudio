@@ -237,12 +237,12 @@ async function parseNonOkError(response, fallbackMessage) {
 
 async function generateOpenAiImage(options) {
   const { apiKey, model, prompt, size, defaultParams } = options;
-  const maxAttempts = 3;
+  const maxAttempts = 2;
   const resolvedModel = resolveOpenAiImageModel(model);
   const openAiParams = sanitizeOpenAiImageParams(defaultParams.openai);
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    const timeout = withTimeout(20000);
+    const timeout = withTimeout(60000);
     try {
       const response = await fetch("https://api.openai.com/v1/images/generations", {
         method: "POST",
@@ -281,6 +281,9 @@ async function generateOpenAiImage(options) {
       const canRetry = retryable && attempt < maxAttempts - 1;
 
       if (!canRetry) {
+        if (caughtError instanceof Error && caughtError.name === "AbortError") {
+          throw new Error("OpenAI image request timed out. Please retry.");
+        }
         throw caughtError;
       }
 
