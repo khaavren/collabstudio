@@ -249,7 +249,7 @@ async function requestGeneratedImage(prompt: string, size: string) {
 
   try {
     const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 65000);
+    const timeout = window.setTimeout(() => controller.abort(), 150000);
     const response = await fetch("/api/generate-image", {
       method: "POST",
       headers: {
@@ -286,7 +286,7 @@ async function requestGeneratedImage(prompt: string, size: string) {
     throw new Error("Image generation returned no image URL.");
   } catch (caughtError) {
     if (caughtError instanceof Error && caughtError.name === "AbortError") {
-      throw new Error("Image generation timed out. Please retry.");
+      throw new Error("Image generation timed out. Please retry (provider response exceeded 150s).");
     }
     throw new Error(
       caughtError instanceof Error
@@ -296,15 +296,47 @@ async function requestGeneratedImage(prompt: string, size: string) {
   }
 }
 
+function dataUrlToBlob(dataUrl: string) {
+  const parts = dataUrl.split(",");
+  if (parts.length < 2) {
+    throw new Error("Invalid image data received.");
+  }
+
+  const header = parts[0] ?? "";
+  const base64 = parts.slice(1).join(",");
+  const match = header.match(/^data:(.*?);base64$/i);
+  const mimeType = match?.[1] || "image/png";
+  const binary = atob(base64);
+  const length = binary.length;
+  const bytes = new Uint8Array(length);
+
+  for (let index = 0; index < length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+
+  return new Blob([bytes], { type: mimeType });
+}
+
 async function uploadImageToStorage(prompt: string, size: string, file?: File | null) {
   const blob = file
     ? file
     : await requestGeneratedImage(prompt, size).then(async (generatedUrl) => {
+        if (generatedUrl.startsWith("data:image/")) {
+          return dataUrlToBlob(generatedUrl);
+        }
+
         const controller = new AbortController();
-        const timeout = window.setTimeout(() => controller.abort(), 30000);
-        const response = await fetch(generatedUrl, { signal: controller.signal }).finally(() => {
-          window.clearTimeout(timeout);
-        });
+        const timeout = window.setTimeout(() => controller.abort(), 90000);
+        const response = await fetch(generatedUrl, { signal: controller.signal })
+          .finally(() => {
+            window.clearTimeout(timeout);
+          })
+          .catch((caughtError) => {
+            if (caughtError instanceof Error && caughtError.name === "AbortError") {
+              throw new Error("Generated image download timed out. Please retry.");
+            }
+            throw caughtError;
+          });
         if (!response.ok) {
           throw new Error("Failed to generate placeholder image.");
         }
