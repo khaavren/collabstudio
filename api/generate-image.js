@@ -280,6 +280,14 @@ function sanitizeOpenAiTextParams(raw) {
   return sanitized;
 }
 
+function resolveOpenAiTextModelFromParams(model, defaultParams) {
+  const configured =
+    isPlainObject(defaultParams?.openaiText) && typeof defaultParams.openaiText.model === "string"
+      ? defaultParams.openaiText.model.trim()
+      : "";
+  return resolveOpenAiTextModel(configured || model);
+}
+
 function isPlainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -568,7 +576,7 @@ async function generateOpenAiImage(options) {
 async function generateOpenAiText(options) {
   const { apiKey, model, prompt, defaultParams } = options;
   const maxAttempts = 2;
-  const resolvedModel = resolveOpenAiTextModel(model);
+  const resolvedModel = resolveOpenAiTextModelFromParams(model, defaultParams);
   const textParams = sanitizeOpenAiTextParams(defaultParams.openaiText);
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
@@ -634,6 +642,53 @@ async function generateOpenAiText(options) {
   }
 
   throw new Error("OpenAI text response failed after retries.");
+}
+
+async function classifyOpenAiOutputMode(options) {
+  const { apiKey, model, prompt, defaultParams } = options;
+  const fallback = inferOutputMode(prompt, "auto");
+  const resolvedModel = resolveOpenAiTextModelFromParams(model, defaultParams);
+  const timeout = withTimeout(20000);
+
+  try {
+    const response = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: resolvedModel,
+        input: [
+          {
+            role: "system",
+            content:
+              "Classify the user request for a collaborative design tool. Respond with exactly one token: IMAGE or TEXT. IMAGE if the user wants a visual generation/edit/variant. TEXT if the user wants analysis, recommendation, explanation, planning, or Q&A."
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        max_output_tokens: 4
+      }),
+      signal: timeout.signal
+    });
+
+    if (!response.ok) {
+      return fallback;
+    }
+
+    const payload = await response.json();
+    const content = (extractTextFromResponsePayload(payload) || "").trim().toLowerCase();
+    if (content.includes("image")) return "image";
+    if (content.includes("text")) return "text";
+    return fallback;
+  } catch {
+    return fallback;
+  } finally {
+    timeout.clear();
+  }
 }
 
 async function generateGeminiImage(options) {
@@ -974,7 +1029,7 @@ export default async function handler(req, res) {
     const size = normalizedSize(body.size);
     const sourceImageUrl = normalizedSourceImageUrl(body.sourceImageUrl);
     const requestedMode = resolveRequestedMode(body.mode);
-    const outputMode = inferOutputMode(prompt, requestedMode);
+    let outputMode = inferOutputMode(prompt, requestedMode);
 
     if (!prompt) {
       sendJson(res, 400, { error: "Prompt is required." });
@@ -1008,6 +1063,15 @@ export default async function handler(req, res) {
           }
 
           const defaultParams = readSafeDefaultParams(apiSetting.default_params);
+          if (requestedMode === "auto" && providerUsed === "OpenAI") {
+            outputMode = await classifyOpenAiOutputMode({
+              apiKey: key,
+              model: modelUsed,
+              prompt,
+              defaultParams
+            });
+          }
+
           if (outputMode === "text") {
             const generated = await generateProviderText({
               provider: providerUsed,
