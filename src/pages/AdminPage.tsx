@@ -117,8 +117,8 @@ function recommendedModelsForProvider(provider: string) {
 
 function pickLatestCurrentModels(provider: string, models: string[]) {
   const normalizedProvider = normalizeProviderValue(provider);
-  const seededModels = [...recommendedModelsForProvider(normalizedProvider), ...models];
-  const uniqueModels = Array.from(new Set(seededModels.filter((entry) => entry.trim().length > 0)));
+  const recommended = recommendedModelsForProvider(normalizedProvider);
+  const uniqueModels = Array.from(new Set(models.filter((entry) => entry.trim().length > 0)));
 
   const openAiPreferred = [
     "gpt-image-1",
@@ -157,19 +157,14 @@ function pickLatestCurrentModels(provider: string, models: string[]) {
   };
 
   if (normalizedProvider === "OpenAI") {
-    const preferred = uniqueModels.filter((model) =>
+    const curated = recommended.filter((model) =>
       openAiPreferred.some((candidate) => model === candidate || model.startsWith(`${candidate}-`))
     );
-    if (preferred.length > 0) return preferred.slice(0, 12);
-
-    return uniqueModels
-      .filter((model) => includesAny(model, ["gpt-image", "gpt-5", "gpt-4.1", "gpt-4o", "o3", "o4"]))
-      .filter((model) => !includesAny(model, ["realtime", "transcribe", "tts", "audio", "embedding"]))
-      .slice(0, 12);
+    return curated.slice(0, 12);
   }
 
   if (normalizedProvider === "Anthropic") {
-    const preferred = uniqueModels.filter((model) =>
+    const preferred = [...recommended, ...uniqueModels].filter((model) =>
       anthropicPreferred.some((candidate) => model === candidate || model.startsWith(`${candidate}-`))
     );
     if (preferred.length > 0) return preferred.slice(0, 12);
@@ -181,7 +176,7 @@ function pickLatestCurrentModels(provider: string, models: string[]) {
   }
 
   if (normalizedProvider === "Google Gemini") {
-    const preferred = uniqueModels.filter((model) =>
+    const preferred = [...recommended, ...uniqueModels].filter((model) =>
       geminiPreferred.some((candidate) => model === candidate || model.startsWith(`${candidate}-`))
     );
     if (preferred.length > 0) return preferred.slice(0, 12);
@@ -193,18 +188,18 @@ function pickLatestCurrentModels(provider: string, models: string[]) {
   }
 
   if (normalizedProvider === "Replicate") {
-    return uniqueModels
+    return [...recommended, ...uniqueModels]
       .filter((model) => includesAny(model, ["flux", "sdxl", "stable", "imagen"]))
       .slice(0, 12);
   }
 
   if (normalizedProvider === "Stability AI") {
-    return uniqueModels
+    return [...recommended, ...uniqueModels]
       .filter((model) => includesAny(model, ["stable-image", "sd3", "sdxl", "ultra", "core"]))
       .slice(0, 12);
   }
 
-  return uniqueModels.slice(0, 12);
+  return [...recommended, ...uniqueModels].slice(0, 12);
 }
 
 function buildModelOptions(provider: string, discoveredModels: string[], selectedModel: string) {
