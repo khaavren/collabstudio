@@ -175,7 +175,6 @@ async function generateOpenAiImage(options) {
         model: model || "gpt-image-1",
         prompt,
         size,
-        response_format: "b64_json",
         ...(isPlainObject(defaultParams.openai) ? defaultParams.openai : {})
       }),
       signal: timeout.signal
