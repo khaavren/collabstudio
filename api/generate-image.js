@@ -107,6 +107,8 @@ function buildEditPrompt(prompt) {
     "Use the provided image as the base.",
     "Preserve overall composition, camera angle, product geometry, background, and lighting.",
     "Apply only the requested modification unless explicitly asked to redesign.",
+    "This is an industrial product concept image, not a wearable smartwatch band.",
+    "Do not convert the product into a watch strap or wrist-worn accessory unless explicitly requested.",
     `Requested change: ${prompt}`
   ].join(" ");
 }
