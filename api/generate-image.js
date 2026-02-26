@@ -46,6 +46,46 @@ function compactErrorText(raw) {
     .slice(0, 320);
 }
 
+function parseJsonSafe(raw) {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function isRetryableRuntimeError(error) {
+  if (!(error instanceof Error)) return false;
+  if (error.name === "AbortError") return true;
+  const message = error.message.toLowerCase();
+  return message.includes("fetch failed") || message.includes("network") || message.includes("timeout");
+}
+
+function createOpenAiHttpError(response, raw) {
+  const payload = parseJsonSafe(raw);
+  const providerMessage =
+    typeof payload?.error?.message === "string"
+      ? payload.error.message
+      : compactErrorText(raw) || `OpenAI image generation failed (${response.status}).`;
+  const type = typeof payload?.error?.type === "string" ? payload.error.type : "";
+  const requestId =
+    response.headers.get("x-request-id") ??
+    response.headers.get("openai-request-id") ??
+    response.headers.get("request-id") ??
+    null;
+  const retryable = response.status >= 500 || response.status === 429 || type === "server_error";
+
+  const detail = compactErrorText(providerMessage);
+  const parts = [
+    retryable ? "OpenAI temporary server error." : "OpenAI request failed.",
+    detail,
+    requestId ? `Request ID: ${requestId}.` : ""
+  ].filter(Boolean);
+  const error = new Error(parts.join(" "));
+  error.retryable = retryable;
+  return error;
+}
+
 function buildPlaceholderUrl(prompt, size, providerUsed, modelUsed) {
   const { width, height } = parseSize(size);
   const seed = createHash("sha256")
@@ -162,37 +202,55 @@ async function parseNonOkError(response, fallbackMessage) {
 
 async function generateOpenAiImage(options) {
   const { apiKey, model, prompt, size, defaultParams } = options;
-  const timeout = withTimeout();
+  const maxAttempts = 3;
 
-  try {
-    const response = await fetch("https://api.openai.com/v1/images/generations", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: model || "gpt-image-1",
-        prompt,
-        size,
-        ...(isPlainObject(defaultParams.openai) ? defaultParams.openai : {})
-      }),
-      signal: timeout.signal
-    });
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const timeout = withTimeout();
+    try {
+      const response = await fetch("https://api.openai.com/v1/images/generations", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: model || "gpt-image-1",
+          prompt,
+          size,
+          ...(isPlainObject(defaultParams.openai) ? defaultParams.openai : {})
+        }),
+        signal: timeout.signal
+      });
 
-    if (!response.ok) {
-      await parseNonOkError(response, `OpenAI image generation failed (${response.status}).`);
+      if (!response.ok) {
+        const raw = await response.text();
+        throw createOpenAiHttpError(response, raw);
+      }
+
+      const payload = await response.json();
+      const image = extractImageFromJson(payload?.data?.[0] ?? payload);
+      if (!image) {
+        throw new Error("OpenAI returned no image content.");
+      }
+
+      return image;
+    } catch (caughtError) {
+      const retryable =
+        (caughtError instanceof Error && caughtError.retryable === true) ||
+        isRetryableRuntimeError(caughtError);
+      const canRetry = retryable && attempt < maxAttempts - 1;
+
+      if (!canRetry) {
+        throw caughtError;
+      }
+
+      await sleep(700 * (attempt + 1));
+    } finally {
+      timeout.clear();
     }
-
-    const payload = await response.json();
-    const image = extractImageFromJson(payload?.data?.[0] ?? payload);
-    if (!image) {
-      throw new Error("OpenAI returned no image content.");
-    }
-    return image;
-  } finally {
-    timeout.clear();
   }
+
+  throw new Error("OpenAI image generation failed after retries.");
 }
 
 async function generateGeminiImage(options) {
