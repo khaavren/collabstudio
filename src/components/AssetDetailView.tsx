@@ -62,6 +62,22 @@ type ConversationMessage =
       sourceVersion: AssetVersion;
     };
 
+function normalizeAssistantMarkdown(rawText: string) {
+  const normalized = rawText
+    .replace(/\r\n/g, "\n")
+    .replace(/\\\*/g, "*")
+    .replace(/\s+(##\s+)/g, "\n\n$1")
+    .replace(/\s+(###\s+)/g, "\n\n$1")
+    .replace(/\s+(####\s+)/g, "\n\n$1")
+    .replace(/\s+-\s+/g, "\n- ")
+    .replace(/\s+(\d+\)\s+)/g, "\n$1")
+    .replace(/\s+(\d+\.\s+)/g, "\n$1")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  return normalized.length > 0 ? normalized : rawText;
+}
+
 function formatTimestamp(timestamp: string) {
   return new Date(timestamp).toLocaleString();
 }
@@ -205,7 +221,7 @@ function GenerationMessage({
               }}
               remarkPlugins={[remarkGfm]}
             >
-              {message.responseText ?? "No text response returned."}
+              {normalizeAssistantMarkdown(message.responseText ?? "No text response returned.")}
             </ReactMarkdown>
           </div>
         )}

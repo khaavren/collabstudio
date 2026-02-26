@@ -594,7 +594,10 @@ async function generateOpenAiText(options) {
             {
               role: "system",
               content:
-                "You are an industrial product development assistant. Give practical, concise answers with recommendations and clear assumptions."
+                "You are an industrial product development assistant. Return clear Markdown with this exact structure: " +
+                "## Recommendation, ## Why, ## Action Plan. " +
+                "Use bullet points and numbered steps on separate lines. " +
+                "Do not output one long paragraph. Keep it concise and practical."
             },
             {
               role: "user",
