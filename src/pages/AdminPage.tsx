@@ -477,7 +477,6 @@ export function AdminPage() {
         return;
       }
 
-      setSettings(payload as AdminSettingsResponse);
       setApiForm((current) => ({ ...current, apiKey: "" }));
       setIsEditingApiKey(false);
       setLogoFile(null);
@@ -992,7 +991,11 @@ export function AdminPage() {
                   <button
                     className="rounded-md bg-[#2b66d5] px-8 py-2 text-base font-semibold text-white transition hover:bg-[#2457b5] disabled:opacity-60"
                     disabled={isSaving}
-                    onClick={saveSettings}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      void saveSettings();
+                    }}
                     type="button"
                   >
                     {isSaving ? "Saving..." : "Save Changes"}
@@ -1246,7 +1249,11 @@ export function AdminPage() {
                   <button
                     className="rounded-md bg-[#2b66d5] px-5 py-2 text-lg font-semibold text-white transition hover:bg-[#2457b5] disabled:opacity-60"
                     disabled={isSaving}
-                    onClick={saveSettings}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      void saveSettings();
+                    }}
                     type="button"
                   >
                     {isSaving ? "Saving..." : "Save Configuration"}
