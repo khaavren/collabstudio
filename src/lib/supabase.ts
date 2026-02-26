@@ -241,7 +241,7 @@ export async function fetchAssetDetails(assetId: string) {
   };
 }
 
-async function requestGeneratedImage(prompt: string, size: string) {
+async function requestGeneratedImage(prompt: string, size: string, sourceImageUrl?: string | null) {
   const fallback = placeholderUrl(prompt, size);
   const {
     data: { session }
@@ -256,7 +256,7 @@ async function requestGeneratedImage(prompt: string, size: string) {
         "Content-Type": "application/json",
         ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {})
       },
-      body: JSON.stringify({ prompt, size }),
+      body: JSON.stringify({ prompt, size, sourceImageUrl }),
       signal: controller.signal
     }).finally(() => {
       window.clearTimeout(timeout);
@@ -317,10 +317,15 @@ function dataUrlToBlob(dataUrl: string) {
   return new Blob([bytes], { type: mimeType });
 }
 
-async function uploadImageToStorage(prompt: string, size: string, file?: File | null) {
+async function uploadImageToStorage(
+  prompt: string,
+  size: string,
+  file?: File | null,
+  sourceImageUrl?: string | null
+) {
   const blob = file
     ? file
-    : await requestGeneratedImage(prompt, size).then(async (generatedUrl) => {
+    : await requestGeneratedImage(prompt, size, sourceImageUrl).then(async (generatedUrl) => {
         if (generatedUrl.startsWith("data:image/")) {
           return dataUrlToBlob(generatedUrl);
         }
@@ -379,6 +384,7 @@ export async function generateAssetVersion(options: {
   style: string;
   notes: string;
   referenceFile: File | null;
+  sourceImageUrl?: string | null;
 }) {
   const {
     activeAsset,
@@ -386,6 +392,7 @@ export async function generateAssetVersion(options: {
     notes,
     prompt,
     referenceFile,
+    sourceImageUrl,
     roomId,
     size,
     style,
@@ -394,7 +401,7 @@ export async function generateAssetVersion(options: {
   const actor = await getCurrentActorProfile();
   const resolvedEditor = firstNonEmptyString(editor, actor.displayName) ?? "Collaborator";
 
-  const imageUrl = await uploadImageToStorage(prompt, size, referenceFile);
+  const imageUrl = await uploadImageToStorage(prompt, size, referenceFile, sourceImageUrl);
 
   let asset = activeAsset;
 

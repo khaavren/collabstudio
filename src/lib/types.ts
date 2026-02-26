@@ -68,4 +68,5 @@ export type GenerateInput = {
   size: string;
   notes: string;
   referenceFile: File | null;
+  sourceImageUrl?: string | null;
 };

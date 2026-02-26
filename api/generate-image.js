@@ -10,6 +10,20 @@ function normalizedSize(size) {
   return /^\d+x\d+$/.test(size) ? size : "1024x1024";
 }
 
+function normalizedSourceImageUrl(value) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (
+    trimmed.startsWith("https://") ||
+    trimmed.startsWith("http://") ||
+    trimmed.startsWith("data:image/")
+  ) {
+    return trimmed;
+  }
+  return null;
+}
+
 function parseSize(size) {
   const [widthRaw, heightRaw] = normalizedSize(size).split("x");
   const width = Number.parseInt(widthRaw, 10) || 1024;
@@ -144,6 +158,84 @@ function toDataUrl(base64, mimeType = "image/png") {
   return `data:${mimeType};base64,${base64}`;
 }
 
+function extensionFromMimeType(mimeType) {
+  const normalized = String(mimeType || "").toLowerCase();
+  if (normalized === "image/png") return "png";
+  if (normalized === "image/webp") return "webp";
+  if (normalized === "image/gif") return "gif";
+  if (normalized === "image/jpeg" || normalized === "image/jpg") return "jpg";
+  return "png";
+}
+
+function parseDataUrlImage(dataUrl) {
+  const match = dataUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+  if (!match) {
+    throw new Error("Source image data URL is invalid.");
+  }
+
+  const mimeType = match[1] || "image/png";
+  const base64 = match[2] || "";
+  const bytes = Buffer.from(base64, "base64");
+
+  if (bytes.length === 0) {
+    throw new Error("Source image data URL is empty.");
+  }
+
+  return {
+    bytes,
+    mimeType
+  };
+}
+
+async function fetchImageBytes(sourceImageUrl) {
+  if (sourceImageUrl.startsWith("data:image/")) {
+    return parseDataUrlImage(sourceImageUrl);
+  }
+
+  const timeout = withTimeout(45000);
+  try {
+    const response = await fetch(sourceImageUrl, {
+      method: "GET",
+      signal: timeout.signal
+    });
+
+    if (!response.ok) {
+      throw new Error(`Unable to load source image (${response.status}).`);
+    }
+
+    const contentType = response.headers.get("content-type") || "image/png";
+    const mimeType = (contentType.split(";")[0] || "image/png").trim().toLowerCase();
+    const bytes = Buffer.from(await response.arrayBuffer());
+
+    if (bytes.length === 0) {
+      throw new Error("Loaded source image is empty.");
+    }
+
+    return {
+      bytes,
+      mimeType: mimeType.startsWith("image/") ? mimeType : "image/png"
+    };
+  } finally {
+    timeout.clear();
+  }
+}
+
+function appendOpenAiFormValue(formData, key, value) {
+  if (value === undefined || value === null) return;
+
+  if (typeof value === "string") {
+    formData.append(key, value);
+    return;
+  }
+
+  if (typeof value === "number" || typeof value === "boolean") {
+    formData.append(key, String(value));
+    return;
+  }
+
+  formData.append(key, JSON.stringify(value));
+}
+
 function extractImageFromJson(value) {
   if (!value) return null;
 
@@ -236,28 +328,51 @@ async function parseNonOkError(response, fallbackMessage) {
 }
 
 async function generateOpenAiImage(options) {
-  const { apiKey, model, prompt, size, defaultParams } = options;
+  const { apiKey, model, prompt, size, defaultParams, sourceImageUrl } = options;
   const maxAttempts = 2;
   const resolvedModel = resolveOpenAiImageModel(model);
   const openAiParams = sanitizeOpenAiImageParams(defaultParams.openai);
+  const sourceImage = normalizedSourceImageUrl(sourceImageUrl);
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const timeout = withTimeout(60000);
     try {
-      const response = await fetch("https://api.openai.com/v1/images/generations", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          model: resolvedModel,
-          prompt,
-          size,
-          ...openAiParams
-        }),
-        signal: timeout.signal
-      });
+      const response = sourceImage
+        ? await (async () => {
+            const source = await fetchImageBytes(sourceImage);
+            const filename = `source.${extensionFromMimeType(source.mimeType)}`;
+            const formData = new FormData();
+            formData.append("model", resolvedModel);
+            formData.append("prompt", prompt);
+            formData.append("size", size);
+            formData.append("image", new Blob([source.bytes], { type: source.mimeType }), filename);
+            for (const [key, value] of Object.entries(openAiParams)) {
+              appendOpenAiFormValue(formData, key, value);
+            }
+
+            return fetch("https://api.openai.com/v1/images/edits", {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${apiKey}`
+              },
+              body: formData,
+              signal: timeout.signal
+            });
+          })()
+        : await fetch("https://api.openai.com/v1/images/generations", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              model: resolvedModel,
+              prompt,
+              size,
+              ...openAiParams
+            }),
+            signal: timeout.signal
+          });
 
       if (!response.ok) {
         const raw = await response.text();
@@ -618,6 +733,7 @@ export default async function handler(req, res) {
     const body = (await getJsonBody(req)) ?? {};
     const prompt = String(body.prompt ?? "").trim();
     const size = normalizedSize(body.size);
+    const sourceImageUrl = normalizedSourceImageUrl(body.sourceImageUrl);
 
     if (!prompt) {
       sendJson(res, 400, { error: "Prompt is required." });
@@ -657,6 +773,7 @@ export default async function handler(req, res) {
             apiKey: key,
             prompt,
             size,
+            sourceImageUrl,
             defaultParams
           });
           modelUsed = generated.modelUsed || modelUsed;

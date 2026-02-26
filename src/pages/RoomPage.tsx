@@ -389,7 +389,14 @@ export function RoomPage() {
 
     try {
       const activeAsset = assets.find((asset) => asset.id === selectedAssetId);
+      const sourceVersion =
+        versions.find((version) => version.id === activeVersionId) ??
+        versions[0] ??
+        null;
       const title = input.title.trim() || activeAsset?.title || "Untitled Concept";
+      const sourceImageUrl = input.referenceFile
+        ? null
+        : input.sourceImageUrl ?? sourceVersion?.image_url ?? activeAsset?.image_url ?? null;
 
       const assetId = await generateAssetVersion({
         activeAsset,
@@ -399,7 +406,8 @@ export function RoomPage() {
         size: input.size,
         style: input.style,
         notes: input.notes,
-        referenceFile: input.referenceFile
+        referenceFile: input.referenceFile,
+        sourceImageUrl
       });
 
       setSelectedAssetId(assetId);
@@ -440,7 +448,8 @@ export function RoomPage() {
         style: baseVersion?.style ?? "Product Photography",
         size: baseVersion?.size ?? "1024x1024",
         notes: "",
-        referenceFile: null
+        referenceFile: null,
+        sourceImageUrl: baseVersion?.image_url ?? selectedAsset.image_url
       });
     } catch {
       // Error banner is already set by handleGenerate.
@@ -577,7 +586,8 @@ export function RoomPage() {
                 style: version.style,
                 size: version.size,
                 notes: version.notes ?? "",
-                referenceFile: null
+                referenceFile: null,
+                sourceImageUrl: version.image_url ?? selectedAsset.image_url
               }).catch(() => {
                 // Error banner is already set by handleGenerate.
               });
@@ -589,7 +599,8 @@ export function RoomPage() {
                 style: version.style,
                 size: version.size,
                 notes: version.notes ?? "",
-                referenceFile: null
+                referenceFile: null,
+                sourceImageUrl: version.image_url ?? selectedAsset.image_url
               }).catch(() => {
                 // Error banner is already set by handleGenerate.
               });
