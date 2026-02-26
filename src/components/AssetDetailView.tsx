@@ -31,7 +31,7 @@ type AssetDetailViewProps = {
   onCreateVariant: (version: AssetVersion) => void;
   onRegenerate: (version: AssetVersion) => void;
   onSelectVersion: (versionId: string) => void;
-  onSendPrompt: (prompt: string) => Promise<void>;
+  onSendPrompt: (prompt: string, referenceFile: File | null) => Promise<void>;
   versions: AssetVersion[];
 };
 
@@ -173,15 +173,31 @@ function GenerationMessage({
 function PromptInputBar({
   isSending,
   onSend,
+  onReferenceFileChange,
   value,
-  onChange
+  onChange,
+  referenceFile
 }: {
   isSending: boolean;
   onSend: () => void;
+  onReferenceFileChange: (file: File | null) => void;
   value: string;
   onChange: (value: string) => void;
+  referenceFile: File | null;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const referencePreviewUrl = useMemo(
+    () => (referenceFile ? URL.createObjectURL(referenceFile) : null),
+    [referenceFile]
+  );
+
+  useEffect(() => {
+    return () => {
+      if (referencePreviewUrl) {
+        URL.revokeObjectURL(referencePreviewUrl);
+      }
+    };
+  }, [referencePreviewUrl]);
 
   function resizeTextarea() {
     const textarea = textareaRef.current;
@@ -199,6 +215,29 @@ function PromptInputBar({
     <div className="shrink-0 border-t border-[var(--border)] bg-[var(--card)] p-4">
       <div className="mx-auto flex max-w-4xl items-end gap-3">
         <div className="relative flex-1">
+          {referenceFile && referencePreviewUrl ? (
+            <div className="mb-2 flex items-center gap-3 rounded-lg border border-[var(--border)] bg-[var(--accent)] px-2 py-2">
+              <img
+                alt="Reference attachment"
+                className="h-11 w-11 rounded-md border border-[var(--border)] object-cover"
+                src={referencePreviewUrl}
+              />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-medium text-[var(--foreground)]">
+                  {referenceFile.name || "Pasted image"}
+                </p>
+                <p className="text-[11px] text-[var(--muted-foreground)]">Reference image attached</p>
+              </div>
+              <button
+                className="rounded-md p-1 text-[var(--muted-foreground)] transition hover:bg-[var(--card)] hover:text-[var(--foreground)]"
+                onClick={() => onReferenceFileChange(null)}
+                title="Remove reference image"
+                type="button"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          ) : null}
           <textarea
             className="min-h-[52px] max-h-32 w-full resize-none rounded-xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--accent)_60%,white)] px-4 py-3 pr-12 text-sm text-[var(--foreground)] outline-none focus:ring-2 focus:ring-[color-mix(in_srgb,var(--primary)_50%,white)]"
             onChange={(event) => onChange(event.target.value)}
@@ -207,6 +246,20 @@ function PromptInputBar({
                 event.preventDefault();
                 onSend();
               }
+            }}
+            onPaste={(event) => {
+              const imageItem = Array.from(event.clipboardData.items).find(
+                (item) => item.kind === "file" && item.type.startsWith("image/")
+              );
+
+              if (!imageItem) return;
+
+              const file = imageItem.getAsFile();
+              if (!file) return;
+
+              const extension = file.type.split("/")[1] || "png";
+              const filename = file.name || `clipboard-image-${Date.now()}.${extension}`;
+              onReferenceFileChange(new File([file], filename, { type: file.type }));
             }}
             placeholder="Describe your next iteration..."
             ref={textareaRef}
@@ -224,7 +277,7 @@ function PromptInputBar({
         </div>
       </div>
       <p className="mt-2 text-center text-xs text-[var(--muted-foreground)]">
-        Press Enter to send · Shift + Enter for new line
+        Press Enter to send · Shift + Enter for new line · Paste image with Cmd/Ctrl + V
       </p>
     </div>
   );
@@ -282,6 +335,7 @@ export function AssetDetailView({
   versions
 }: AssetDetailViewProps) {
   const [promptInput, setPromptInput] = useState("");
+  const [promptReferenceFile, setPromptReferenceFile] = useState<File | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isSendingPrompt, setIsSendingPrompt] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -354,8 +408,9 @@ export function AssetDetailView({
 
     setIsSendingPrompt(true);
     try {
-      await onSendPrompt(trimmed);
+      await onSendPrompt(trimmed, promptReferenceFile);
       setPromptInput("");
+      setPromptReferenceFile(null);
     } finally {
       setIsSendingPrompt(false);
     }
@@ -467,7 +522,9 @@ export function AssetDetailView({
           <PromptInputBar
             isSending={isSendingPrompt}
             onChange={setPromptInput}
+            onReferenceFileChange={setPromptReferenceFile}
             onSend={handleSendPrompt}
+            referenceFile={promptReferenceFile}
             value={promptInput}
           />
         </div>

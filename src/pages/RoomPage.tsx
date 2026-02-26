@@ -433,7 +433,7 @@ export function RoomPage() {
     }
   }
 
-  async function handleSendPrompt(prompt: string) {
+  async function handleSendPrompt(prompt: string, referenceFile: File | null) {
     if (!selectedAsset) return;
 
     const baseVersion =
@@ -448,8 +448,8 @@ export function RoomPage() {
         style: baseVersion?.style ?? "Product Photography",
         size: baseVersion?.size ?? "1024x1024",
         notes: "",
-        referenceFile: null,
-        sourceImageUrl: baseVersion?.image_url ?? selectedAsset.image_url
+        referenceFile,
+        sourceImageUrl: referenceFile ? null : baseVersion?.image_url ?? selectedAsset.image_url
       });
     } catch {
       // Error banner is already set by handleGenerate.
