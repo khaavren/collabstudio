@@ -29,6 +29,7 @@ export type AssetVersion = {
   asset_id: string;
   version: string;
   prompt: string;
+  image_url: string | null;
   size: string;
   style: string;
   notes: string | null;

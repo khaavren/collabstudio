@@ -306,10 +306,9 @@ export function AssetDetailView({
 
   const conversationThread = useMemo<ConversationMessage[]>(() => {
     return chronologicalVersions.flatMap((version) => {
-      const imageUrl =
-        version.id === latestVersionId
-          ? asset.image_url
-          : placeholderUrl(version.prompt, version.size || "1024x1024");
+      const imageUrl = version.image_url ?? (version.id === latestVersionId
+        ? asset.image_url
+        : placeholderUrl(version.prompt, version.size || "1024x1024"));
 
       return [
         {

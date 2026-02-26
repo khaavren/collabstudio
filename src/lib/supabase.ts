@@ -450,6 +450,7 @@ export async function generateAssetVersion(options: {
       asset_id: asset.id,
       version: nextVersion,
       prompt,
+      image_url: imageUrl,
       size,
       style,
       notes: notes || null,
