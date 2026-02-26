@@ -101,6 +101,41 @@ function readSafeDefaultParams(value) {
   return value;
 }
 
+function resolveOpenAiImageModel(model) {
+  const raw = String(model ?? "").trim();
+  const lowered = raw.toLowerCase();
+
+  if (!raw) return "gpt-image-1";
+  if (lowered.includes("image")) return raw;
+  if (lowered.startsWith("dall-e")) return raw;
+
+  // Non-image models (for example GPT-5 text models) are not valid for the images endpoint.
+  return "gpt-image-1";
+}
+
+function sanitizeOpenAiImageParams(raw) {
+  if (!isPlainObject(raw)) return {};
+
+  const allowedKeys = new Set([
+    "quality",
+    "background",
+    "output_format",
+    "output_compression",
+    "moderation",
+    "n",
+    "style",
+    "user"
+  ]);
+
+  const sanitized = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (!allowedKeys.has(key)) continue;
+    sanitized[key] = value;
+  }
+
+  return sanitized;
+}
+
 function isPlainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -202,7 +237,9 @@ async function parseNonOkError(response, fallbackMessage) {
 
 async function generateOpenAiImage(options) {
   const { apiKey, model, prompt, size, defaultParams } = options;
-  const maxAttempts = 3;
+  const maxAttempts = 5;
+  const resolvedModel = resolveOpenAiImageModel(model);
+  const openAiParams = sanitizeOpenAiImageParams(defaultParams.openai);
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const timeout = withTimeout();
@@ -214,10 +251,10 @@ async function generateOpenAiImage(options) {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          model: model || "gpt-image-1",
+          model: resolvedModel,
           prompt,
           size,
-          ...(isPlainObject(defaultParams.openai) ? defaultParams.openai : {})
+          ...openAiParams
         }),
         signal: timeout.signal
       });
@@ -233,7 +270,10 @@ async function generateOpenAiImage(options) {
         throw new Error("OpenAI returned no image content.");
       }
 
-      return image;
+      return {
+        imageUrl: image,
+        modelUsed: resolvedModel
+      };
     } catch (caughtError) {
       const retryable =
         (caughtError instanceof Error && caughtError.retryable === true) ||
@@ -244,7 +284,8 @@ async function generateOpenAiImage(options) {
         throw caughtError;
       }
 
-      await sleep(700 * (attempt + 1));
+      const backoffMs = Math.min(1000 * 2 ** attempt, 8000);
+      await sleep(backoffMs);
     } finally {
       timeout.clear();
     }
@@ -498,19 +539,31 @@ async function generateProviderImage(options) {
   }
 
   if (provider === "Google Gemini") {
-    return generateGeminiImage(options);
+    return {
+      imageUrl: await generateGeminiImage(options),
+      modelUsed: options.model
+    };
   }
 
   if (provider === "Replicate") {
-    return generateReplicateImage(options);
+    return {
+      imageUrl: await generateReplicateImage(options),
+      modelUsed: options.model
+    };
   }
 
   if (provider === "Stability AI") {
-    return generateStabilityImage(options);
+    return {
+      imageUrl: await generateStabilityImage(options),
+      modelUsed: options.model
+    };
   }
 
   if (provider === "Custom HTTP") {
-    return generateCustomHttpImage(options);
+    return {
+      imageUrl: await generateCustomHttpImage(options),
+      modelUsed: options.model
+    };
   }
 
   if (provider === "Anthropic") {
@@ -595,7 +648,7 @@ export default async function handler(req, res) {
           }
 
           const defaultParams = readSafeDefaultParams(apiSetting.default_params);
-          const imageUrl = await generateProviderImage({
+          const generated = await generateProviderImage({
             provider: providerUsed,
             model: modelUsed,
             apiKey: key,
@@ -603,11 +656,12 @@ export default async function handler(req, res) {
             size,
             defaultParams
           });
+          modelUsed = generated.modelUsed || modelUsed;
 
           await incrementUsage(organizationId);
 
           sendJson(res, 200, {
-            imageUrl,
+            imageUrl: generated.imageUrl,
             configured: true,
             providerUsed,
             modelUsed
