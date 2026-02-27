@@ -145,6 +145,38 @@ function GenerationMessage({
 
         {isImageResponse ? (
           <>
+            {message.responseText ? (
+              <div className="max-w-2xl rounded-xl border border-[var(--border)] bg-[var(--card)] px-4 py-3 text-sm text-[var(--foreground)]">
+                <ReactMarkdown
+                  components={{
+                    h1: ({ children }) => <h3 className="mb-2 mt-1 text-base font-semibold">{children}</h3>,
+                    h2: ({ children }) => <h4 className="mb-2 mt-1 text-sm font-semibold">{children}</h4>,
+                    h3: ({ children }) => <h5 className="mb-2 mt-1 text-sm font-semibold">{children}</h5>,
+                    p: ({ children }) => <p className="mb-2 leading-relaxed">{children}</p>,
+                    ul: ({ children }) => <ul className="mb-2 list-disc space-y-1 pl-5">{children}</ul>,
+                    ol: ({ children }) => <ol className="mb-2 list-decimal space-y-1 pl-5">{children}</ol>,
+                    li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+                    strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                    em: ({ children }) => <em className="italic">{children}</em>,
+                    hr: () => <hr className="my-3 border-[var(--border)]" />,
+                    blockquote: ({ children }) => (
+                      <blockquote className="mb-2 border-l-2 border-[var(--border)] pl-3 text-[var(--muted-foreground)]">
+                        {children}
+                      </blockquote>
+                    ),
+                    code: ({ children, className }) =>
+                      className ? (
+                        <code className="rounded bg-[var(--accent)] px-1.5 py-0.5 text-xs">{children}</code>
+                      ) : (
+                        <code className="rounded bg-[var(--accent)] px-1 py-0.5 text-xs">{children}</code>
+                      )
+                  }}
+                  remarkPlugins={[remarkGfm]}
+                >
+                  {normalizeAssistantMarkdown(message.responseText)}
+                </ReactMarkdown>
+              </div>
+            ) : null}
             <button
               className="group relative block w-full max-w-2xl overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--muted)] text-left"
               onClick={() => {
@@ -450,7 +482,7 @@ export function AssetDetailView({
           author: "AI Assistant",
           timestamp: formatTimestamp(version.created_at),
           imageUrl: isImageOutput ? imageUrl : null,
-          responseText: isImageOutput ? null : version.response_text,
+          responseText: version.response_text,
           annotations: isImageOutput ? annotations : [],
           sourceVersion: version
         }

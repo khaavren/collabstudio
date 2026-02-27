@@ -133,6 +133,18 @@ function normalizeContextMessages(value) {
   return normalized.slice(-16);
 }
 
+function buildTextInputPrompt(prompt, contextMessages = []) {
+  if (!Array.isArray(contextMessages) || contextMessages.length === 0) {
+    return prompt;
+  }
+
+  const contextBlock = contextMessages
+    .map((message) => `${message.role === "assistant" ? "Assistant" : "User"}: ${message.content}`)
+    .join("\n");
+
+  return `${prompt}\n\nConversation context:\n${contextBlock}`;
+}
+
 function shouldAllowFullRedesign(prompt) {
   const normalized = String(prompt || "").toLowerCase();
   const redesignSignals = [
@@ -1113,17 +1125,11 @@ export default async function handler(req, res) {
           }
 
           if (outputMode === "text") {
-            const textInputContext =
-              contextMessages.length > 0
-                ? `\n\nConversation context:\n${contextMessages
-                    .map((message) => `${message.role === "assistant" ? "Assistant" : "User"}: ${message.content}`)
-                    .join("\n")}`
-                : "";
             const generated = await generateProviderText({
               provider: providerUsed,
               model: modelUsed,
               apiKey: key,
-              prompt: `${prompt}${textInputContext}`,
+              prompt: buildTextInputPrompt(prompt, contextMessages),
               size,
               sourceImageUrl,
               defaultParams
@@ -1152,12 +1158,31 @@ export default async function handler(req, res) {
             defaultParams
           });
           modelUsed = generated.modelUsed || modelUsed;
+          let responseText = null;
+
+          if (requestedMode === "auto") {
+            try {
+              const textGenerated = await generateProviderText({
+                provider: providerUsed,
+                model: modelUsed,
+                apiKey: key,
+                prompt: buildTextInputPrompt(prompt, contextMessages),
+                size,
+                sourceImageUrl,
+                defaultParams
+              });
+              responseText = textGenerated.responseText;
+            } catch {
+              responseText = null;
+            }
+          }
 
           await incrementUsage(organizationId, true);
 
           sendJson(res, 200, {
             outputType: "image",
             imageUrl: generated.imageUrl,
+            responseText,
             configured: true,
             providerUsed,
             modelUsed

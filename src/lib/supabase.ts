@@ -245,6 +245,7 @@ type GeneratedOutput =
   | {
       outputType: "image";
       imageUrl: string;
+      responseText?: string | null;
     }
   | {
       outputType: "text";
@@ -312,7 +313,8 @@ async function requestGeneratedOutput(
     if (payload.imageUrl) {
       return {
         outputType: "image" as const,
-        imageUrl: payload.imageUrl
+        imageUrl: payload.imageUrl,
+        responseText: payload.responseText ?? null
       };
     }
 
@@ -446,7 +448,8 @@ async function uploadImageToStorage(
 
   return {
     outputType: "image",
-    imageUrl: await uploadBlobToStorage(blob, "generated")
+    imageUrl: await uploadBlobToStorage(blob, "generated"),
+    responseText: generatedResult.responseText ?? null
   };
 }
 
@@ -520,7 +523,7 @@ export async function generateAssetVersion(options: {
     conversationContext
   );
   const imageUrl = generatedOutput.outputType === "image" ? generatedOutput.imageUrl : null;
-  const responseText = generatedOutput.outputType === "text" ? generatedOutput.responseText : null;
+  const responseText = generatedOutput.responseText ?? null;
 
   let asset = activeAsset;
 
