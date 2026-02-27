@@ -7,12 +7,18 @@ import { SiteTopNav } from "@/components/SiteTopNav";
 export function ProfilePage() {
   const navigate = useNavigate();
   const avatarInputRef = useRef<HTMLInputElement>(null);
-  const { isAuthenticated, updateUser, user } = useAuth();
+  const { changePassword, isAuthenticated, updateUser, user } = useAuth();
 
   const [displayName, setDisplayName] = useState(user?.name ?? "");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(user?.avatarUrl ?? null);
   const [isSaving, setIsSaving] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [profileMessage, setProfileMessage] = useState<string | null>(null);
+  const [profileMessageTone, setProfileMessageTone] = useState<"success" | "error" | null>(null);
+  const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
+  const [passwordMessageTone, setPasswordMessageTone] = useState<"success" | "error" | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -37,18 +43,50 @@ export function ProfilePage() {
   async function handleSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsSaving(true);
-    setMessage(null);
+    setProfileMessage(null);
+    setProfileMessageTone(null);
 
     try {
       await updateUser({
         name: displayName.trim() || (user?.email?.split("@")[0] ?? "Member"),
         avatarUrl
       });
-      setMessage("Profile updated.");
+      setProfileMessage("Profile updated.");
+      setProfileMessageTone("success");
     } catch (caught) {
-      setMessage(caught instanceof Error ? caught.message : "Unable to update profile.");
+      setProfileMessage(caught instanceof Error ? caught.message : "Unable to update profile.");
+      setProfileMessageTone("error");
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function handlePasswordUpdate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsUpdatingPassword(true);
+    setPasswordMessage(null);
+    setPasswordMessageTone(null);
+
+    try {
+      const cleanPassword = newPassword.trim();
+      const cleanConfirmation = confirmPassword.trim();
+      if (!cleanPassword || !cleanConfirmation) {
+        throw new Error("Enter and confirm your new password.");
+      }
+      if (cleanPassword !== cleanConfirmation) {
+        throw new Error("Passwords do not match.");
+      }
+
+      await changePassword(cleanPassword);
+      setNewPassword("");
+      setConfirmPassword("");
+      setPasswordMessage("Password updated.");
+      setPasswordMessageTone("success");
+    } catch (caught) {
+      setPasswordMessage(caught instanceof Error ? caught.message : "Unable to update password.");
+      setPasswordMessageTone("error");
+    } finally {
+      setIsUpdatingPassword(false);
     }
   }
 
@@ -82,9 +120,15 @@ export function ProfilePage() {
               </div>
             </div>
 
-            {message ? (
-              <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-                {message}
+            {profileMessage ? (
+              <div
+                className={`mb-4 rounded-lg px-3 py-2 text-sm ${
+                  profileMessageTone === "error"
+                    ? "border border-[#e8cfc6] bg-[#fff4f0] text-[#9d4d3d]"
+                    : "border border-emerald-200 bg-emerald-50 text-emerald-700"
+                }`}
+              >
+                {profileMessage}
               </div>
             ) : null}
 
@@ -165,6 +209,57 @@ export function ProfilePage() {
                   type="submit"
                 >
                   {isSaving ? "Saving..." : "Save Profile"}
+                </button>
+              </div>
+            </form>
+
+            <div className="my-6 border-t border-[var(--border)]" />
+
+            {passwordMessage ? (
+              <div
+                className={`mb-4 rounded-lg px-3 py-2 text-sm ${
+                  passwordMessageTone === "error"
+                    ? "border border-[#e8cfc6] bg-[#fff4f0] text-[#9d4d3d]"
+                    : "border border-emerald-200 bg-emerald-50 text-emerald-700"
+                }`}
+              >
+                {passwordMessage}
+              </div>
+            ) : null}
+
+            <form className="space-y-4" onSubmit={handlePasswordUpdate}>
+              <h2 className="text-base font-medium text-[var(--foreground)]">Change Password</h2>
+              <label className="block space-y-1">
+                <span className="text-sm text-[var(--foreground)]">New Password</span>
+                <input
+                  className="w-full rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--foreground)] outline-none"
+                  minLength={8}
+                  onChange={(event) => setNewPassword(event.target.value)}
+                  placeholder="At least 8 characters"
+                  type="password"
+                  value={newPassword}
+                />
+              </label>
+
+              <label className="block space-y-1">
+                <span className="text-sm text-[var(--foreground)]">Confirm New Password</span>
+                <input
+                  className="w-full rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--foreground)] outline-none"
+                  minLength={8}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
+                  placeholder="Re-enter password"
+                  type="password"
+                  value={confirmPassword}
+                />
+              </label>
+
+              <div className="pt-2">
+                <button
+                  className="rounded-lg bg-[var(--primary)] px-5 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-60"
+                  disabled={isUpdatingPassword}
+                  type="submit"
+                >
+                  {isUpdatingPassword ? "Updating..." : "Update Password"}
                 </button>
               </div>
             </form>

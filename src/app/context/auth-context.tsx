@@ -18,6 +18,7 @@ type AuthContextValue = {
   resetPassword: (email: string) => Promise<void>;
   logout: () => Promise<void>;
   updateUser: (next: Partial<AuthUser>) => Promise<void>;
+  changePassword: (nextPassword: string) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -221,6 +222,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  async function changePassword(nextPassword: string) {
+    const cleanPassword = nextPassword.trim();
+    if (cleanPassword.length < 8) {
+      throw new Error("New password must be at least 8 characters.");
+    }
+    if (!isSupabaseConfigured) {
+      throw new Error("Supabase is not configured.");
+    }
+
+    const { error } = await supabase.auth.updateUser({
+      password: cleanPassword
+    });
+    if (error) {
+      throw new Error(error.message || "Unable to update password.");
+    }
+  }
+
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
@@ -229,7 +247,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signup,
       resetPassword,
       logout,
-      updateUser
+      updateUser,
+      changePassword
     }),
     [user]
   );
