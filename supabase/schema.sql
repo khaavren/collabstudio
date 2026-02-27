@@ -33,6 +33,51 @@ create table if not exists workspace_collaborators (
   unique (workspace_id, email)
 );
 
+create or replace function public.current_user_email()
+returns text
+language sql
+stable
+as $$
+  select lower(coalesce(auth.jwt() ->> 'email', ''));
+$$;
+
+create or replace function public.is_workspace_member(target_workspace_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.workspace_collaborators wc
+    where wc.workspace_id = target_workspace_id
+      and (
+        wc.user_id = auth.uid()
+        or lower(wc.email) = public.current_user_email()
+      )
+  );
+$$;
+
+create or replace function public.is_workspace_admin(target_workspace_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.workspace_collaborators wc
+    where wc.workspace_id = target_workspace_id
+      and wc.role in ('owner', 'admin')
+      and (
+        wc.user_id = auth.uid()
+        or lower(wc.email) = public.current_user_email()
+      )
+  );
+$$;
+
 create table if not exists rooms (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid references workspaces(id) on delete cascade,
@@ -195,15 +240,7 @@ create policy "workspaces_select_member" on workspaces
 for select to authenticated
 using (
   owner_id = auth.uid()
-  or exists (
-    select 1
-    from workspace_collaborators wc
-    where wc.workspace_id = workspaces.id
-      and (
-        wc.user_id = auth.uid()
-        or lower(wc.email) = lower(coalesce(auth.jwt() ->> 'email', ''))
-      )
-  )
+  or public.is_workspace_member(id)
 );
 
 drop policy if exists "workspaces_insert_owner" on workspaces;
@@ -216,23 +253,11 @@ create policy "workspaces_update_owner_admin" on workspaces
 for update to authenticated
 using (
   owner_id = auth.uid()
-  or exists (
-    select 1
-    from workspace_collaborators wc
-    where wc.workspace_id = workspaces.id
-      and wc.user_id = auth.uid()
-      and wc.role in ('owner', 'admin')
-  )
+  or public.is_workspace_admin(id)
 )
 with check (
   owner_id = auth.uid()
-  or exists (
-    select 1
-    from workspace_collaborators wc
-    where wc.workspace_id = workspaces.id
-      and wc.user_id = auth.uid()
-      and wc.role in ('owner', 'admin')
-  )
+  or public.is_workspace_admin(id)
 );
 
 drop policy if exists "workspaces_delete_owner_admin" on workspaces;
@@ -240,28 +265,14 @@ create policy "workspaces_delete_owner_admin" on workspaces
 for delete to authenticated
 using (
   owner_id = auth.uid()
-  or exists (
-    select 1
-    from workspace_collaborators wc
-    where wc.workspace_id = workspaces.id
-      and wc.user_id = auth.uid()
-      and wc.role in ('owner', 'admin')
-  )
+  or public.is_workspace_admin(id)
 );
 
 drop policy if exists "workspace_collaborators_select_member" on workspace_collaborators;
 create policy "workspace_collaborators_select_member" on workspace_collaborators
 for select to authenticated
 using (
-  exists (
-    select 1
-    from workspace_collaborators me
-    where me.workspace_id = workspace_collaborators.workspace_id
-      and (
-        me.user_id = auth.uid()
-        or lower(me.email) = lower(coalesce(auth.jwt() ->> 'email', ''))
-      )
-  )
+  public.is_workspace_member(workspace_id)
 );
 
 drop policy if exists "workspace_collaborators_insert_owner_admin" on workspace_collaborators;
@@ -278,48 +289,24 @@ with check (
         and w.owner_id = auth.uid()
     )
   )
-  or exists (
-    select 1
-    from workspace_collaborators me
-    where me.workspace_id = workspace_collaborators.workspace_id
-      and me.user_id = auth.uid()
-      and me.role in ('owner', 'admin')
-  )
+  or public.is_workspace_admin(workspace_id)
 );
 
 drop policy if exists "workspace_collaborators_update_owner_admin" on workspace_collaborators;
 create policy "workspace_collaborators_update_owner_admin" on workspace_collaborators
 for update to authenticated
 using (
-  exists (
-    select 1
-    from workspace_collaborators me
-    where me.workspace_id = workspace_collaborators.workspace_id
-      and me.user_id = auth.uid()
-      and me.role in ('owner', 'admin')
-  )
+  public.is_workspace_admin(workspace_id)
 )
 with check (
-  exists (
-    select 1
-    from workspace_collaborators me
-    where me.workspace_id = workspace_collaborators.workspace_id
-      and me.user_id = auth.uid()
-      and me.role in ('owner', 'admin')
-  )
+  public.is_workspace_admin(workspace_id)
 );
 
 drop policy if exists "workspace_collaborators_delete_owner_admin" on workspace_collaborators;
 create policy "workspace_collaborators_delete_owner_admin" on workspace_collaborators
 for delete to authenticated
 using (
-  exists (
-    select 1
-    from workspace_collaborators me
-    where me.workspace_id = workspace_collaborators.workspace_id
-      and me.user_id = auth.uid()
-      and me.role in ('owner', 'admin')
-  )
+  public.is_workspace_admin(workspace_id)
 );
 
 drop policy if exists "rooms_public_read" on rooms;
