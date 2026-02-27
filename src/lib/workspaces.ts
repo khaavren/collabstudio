@@ -40,7 +40,10 @@ async function requestJson<T>(input: string, init?: RequestInit, fallbackError =
   let response: Response;
   try {
     response = await fetchWithAuth(input, init);
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.message.trim()) {
+      throw new Error(error.message);
+    }
     throw new Error("Network error: unable to reach application API.");
   }
 
