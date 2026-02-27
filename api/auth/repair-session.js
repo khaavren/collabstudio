@@ -37,19 +37,28 @@ async function handlePost(req, res) {
   }
 
   const authClient = getSupabaseServerAuthClient();
-  const { data, error } = await authClient.auth.getUser(accessToken);
-  if (error || !data.user) {
+  const primaryResult = await authClient.auth.getUser(accessToken);
+  const userFromPrimary = primaryResult.error ? null : primaryResult.data.user;
+
+  let resolvedUser = userFromPrimary;
+  if (!resolvedUser) {
+    const adminClient = getSupabaseAdminClient();
+    const fallbackResult = await adminClient.auth.getUser(accessToken);
+    resolvedUser = fallbackResult.error ? null : fallbackResult.data.user;
+  }
+
+  if (!resolvedUser) {
     throw new HttpError("Invalid access token.", 401);
   }
 
-  const { repaired, userMetadata } = sanitizeMetadata(data.user.user_metadata);
+  const { repaired, userMetadata } = sanitizeMetadata(resolvedUser.user_metadata);
   if (!repaired) {
     sendJson(res, 200, { ok: true, repaired: false });
     return;
   }
 
   const adminClient = getSupabaseAdminClient();
-  const { error: updateError } = await adminClient.auth.admin.updateUserById(data.user.id, {
+  const { error: updateError } = await adminClient.auth.admin.updateUserById(resolvedUser.id, {
     user_metadata: userMetadata
   });
   if (updateError) {
