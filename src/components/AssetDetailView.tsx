@@ -59,6 +59,7 @@ type ConversationMessage =
       timestamp: string;
       imageUrl: string | null;
       responseText: string | null;
+      hideImage?: boolean;
       annotations: Annotation[];
       sourceVersion: AssetVersion;
     };
@@ -123,7 +124,7 @@ function GenerationMessage({
   onImageClick: (imageUrl: string) => void;
   onRegenerate: (version: AssetVersion) => void;
 }) {
-  const isImageResponse = Boolean(message.imageUrl);
+  const isImageResponse = Boolean(message.imageUrl) && !message.hideImage;
 
   return (
     <div className="flex items-start gap-3">
@@ -460,6 +461,7 @@ export function AssetDetailView({
         : placeholderUrl(version.prompt, version.size || "1024x1024"));
       const outputType = version.output_type ?? "image";
       const isImageOutput = outputType !== "text";
+      const hideInitialImage = isImageOutput && version.version === "v1" && Boolean(version.response_text);
 
       return [
         {
@@ -483,6 +485,7 @@ export function AssetDetailView({
           timestamp: formatTimestamp(version.created_at),
           imageUrl: isImageOutput ? imageUrl : null,
           responseText: version.response_text,
+          hideImage: hideInitialImage,
           annotations: isImageOutput ? annotations : [],
           sourceVersion: version
         }
