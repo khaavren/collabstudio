@@ -1,4 +1,4 @@
-import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { fetchWithAuth } from "@/lib/admin";
 import { timeAgo } from "@/lib/utils";
 
 export type CollaboratorRole = "owner" | "admin" | "editor" | "viewer";
@@ -24,156 +24,55 @@ export type WorkspaceRecord = {
   ownerName: string;
 };
 
-type WorkspaceRow = {
-  id: string;
-  name: string;
-  description: string | null;
-  color: string | null;
-  owner_id: string;
-  owner_name: string | null;
-  owner_email: string | null;
-  updated_at: string;
+type WorkspaceApiRecord = Omit<WorkspaceRecord, "lastAccessed"> & {
+  lastAccessed: string;
 };
 
-type WorkspaceCollaboratorRow = {
-  id: string;
-  workspace_id: string;
-  user_id: string | null;
-  email: string;
-  display_name: string | null;
-  role: CollaboratorRole;
-};
-
-type RoomRow = {
-  id: string;
-  slug: string;
-  workspace_id: string | null;
-  created_at: string;
-};
-
-function normalizeRole(value: string): CollaboratorRole {
-  if (value === "owner" || value === "admin" || value === "editor" || value === "viewer") {
-    return value;
+function toUserError(responseBody: unknown, fallback: string) {
+  if (responseBody && typeof responseBody === "object" && "error" in responseBody) {
+    const message = String((responseBody as { error?: string }).error ?? "").trim();
+    if (message) return message;
   }
-  return "viewer";
+  return fallback;
 }
 
-function toDisplayName(email: string) {
-  return email
-    .split("@")[0]
-    .replace(/[._-]/g, " ")
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+async function requestJson<T>(input: string, init?: RequestInit, fallbackError = "Request failed.") {
+  let response: Response;
+  try {
+    response = await fetchWithAuth(input, init);
+  } catch {
+    throw new Error("Network error: unable to reach application API.");
+  }
+
+  const payload = (await response.json().catch(() => ({}))) as T & { error?: string };
+  if (!response.ok) {
+    throw new Error(toUserError(payload, fallbackError));
+  }
+
+  return payload;
 }
 
-function toWorkspaceError(error: { message?: string } | null | undefined, fallback: string) {
-  const message = error?.message?.trim();
-  if (!message) return fallback;
-  if (message.toLowerCase().includes("failed to fetch")) {
-    return "Network error: cannot reach Supabase. Verify VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, and internet access.";
-  }
-  return message;
+function mapWorkspaceRecords(workspaces: WorkspaceApiRecord[]) {
+  return workspaces.map((workspace) => ({
+    ...workspace,
+    lastAccessed: timeAgo(workspace.lastAccessed)
+  }));
 }
 
 export function getDefaultWorkspaces() {
   return [] as WorkspaceRecord[];
 }
 
-function buildWorkspaceRecords(
-  workspaces: WorkspaceRow[],
-  collaborators: WorkspaceCollaboratorRow[],
-  rooms: RoomRow[]
-) {
-  const collaboratorsByWorkspace = new Map<string, WorkspaceCollaboratorRow[]>();
-  collaborators.forEach((row) => {
-    const current = collaboratorsByWorkspace.get(row.workspace_id) ?? [];
-    current.push(row);
-    collaboratorsByWorkspace.set(row.workspace_id, current);
-  });
-
-  const roomsByWorkspace = new Map<string, RoomRow[]>();
-  rooms.forEach((row) => {
-    if (!row.workspace_id) return;
-    const current = roomsByWorkspace.get(row.workspace_id) ?? [];
-    current.push(row);
-    roomsByWorkspace.set(row.workspace_id, current);
-  });
-
-  return workspaces.map((workspace) => {
-    const workspaceCollaborators = collaboratorsByWorkspace.get(workspace.id) ?? [];
-    const collaboratorList: CollaboratorRecord[] = workspaceCollaborators.map((entry) => ({
-      id: entry.id,
-      name: entry.display_name?.trim() || toDisplayName(entry.email),
-      email: entry.email,
-      role: normalizeRole(entry.role)
-    }));
-
-    const workspaceRooms = (roomsByWorkspace.get(workspace.id) ?? []).sort((a, b) =>
-      a.created_at.localeCompare(b.created_at)
-    );
-
-    return {
-      id: workspace.id,
-      name: workspace.name,
-      description: workspace.description ?? "",
-      roomCount: workspaceRooms.length,
-      defaultRoomSlug: workspaceRooms[0]?.slug ?? null,
-      lastAccessed: timeAgo(workspace.updated_at),
-      collaborators: collaboratorList.length,
-      collaboratorsList: collaboratorList,
-      color: workspace.color || "var(--primary)",
-      owner: workspace.owner_id,
-      ownerName: workspace.owner_name?.trim() || toDisplayName(workspace.owner_email ?? "owner@workspace")
-    } satisfies WorkspaceRecord;
-  });
-}
-
-export async function fetchWorkspacesForUser(params: { userId: string; email: string | null }) {
-  if (!isSupabaseConfigured) return getDefaultWorkspaces();
-  if (!params.userId) return getDefaultWorkspaces();
-
-  const normalizedEmail = params.email?.trim().toLowerCase() ?? "";
-  const orFilter = normalizedEmail
-    ? `user_id.eq.${params.userId},email.eq.${normalizedEmail}`
-    : `user_id.eq.${params.userId}`;
-
-  const memberLookup = await supabase
-    .from("workspace_collaborators")
-    .select("workspace_id")
-    .or(orFilter);
-
-  if (memberLookup.error) {
-    throw new Error(toWorkspaceError(memberLookup.error, "Unable to load workspaces."));
-  }
-
-  const workspaceIds = Array.from(
-    new Set((memberLookup.data ?? []).map((entry) => entry.workspace_id).filter(Boolean))
+export async function fetchWorkspacesForUser(_params: { userId: string; email: string | null }) {
+  const payload = await requestJson<{ workspaces: WorkspaceApiRecord[] }>(
+    "/api/workspaces",
+    {
+      method: "GET"
+    },
+    "Unable to load workspaces."
   );
 
-  if (workspaceIds.length === 0) {
-    return getDefaultWorkspaces();
-  }
-
-  const [workspaceQuery, collaboratorQuery, roomQuery] = await Promise.all([
-    supabase.from("workspaces").select("*").in("id", workspaceIds).order("updated_at", { ascending: false }),
-    supabase.from("workspace_collaborators").select("*").in("workspace_id", workspaceIds),
-    supabase.from("rooms").select("id,slug,workspace_id,created_at").in("workspace_id", workspaceIds)
-  ]);
-
-  if (workspaceQuery.error) {
-    throw new Error(toWorkspaceError(workspaceQuery.error, "Unable to load workspaces."));
-  }
-  if (collaboratorQuery.error) {
-    throw new Error(toWorkspaceError(collaboratorQuery.error, "Unable to load collaborators."));
-  }
-  if (roomQuery.error) {
-    throw new Error(toWorkspaceError(roomQuery.error, "Unable to load rooms."));
-  }
-
-  return buildWorkspaceRecords(
-    (workspaceQuery.data ?? []) as WorkspaceRow[],
-    (collaboratorQuery.data ?? []) as WorkspaceCollaboratorRow[],
-    (roomQuery.data ?? []) as RoomRow[]
-  );
+  return mapWorkspaceRecords(payload.workspaces ?? []);
 }
 
 export async function createWorkspaceForUser(params: {
@@ -184,80 +83,46 @@ export async function createWorkspaceForUser(params: {
   description: string;
   color?: string;
 }) {
-  if (!isSupabaseConfigured) {
-    throw new Error("Supabase is not configured.");
-  }
+  const payload = await requestJson<{ workspaceId: string }>(
+    "/api/workspaces",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        name: params.name,
+        description: params.description,
+        ownerName: params.ownerName,
+        ownerEmail: params.ownerEmail,
+        color: params.color
+      })
+    },
+    "Unable to create workspace."
+  );
 
-  const nextName = params.name.trim();
-  if (!nextName) {
-    throw new Error("Workspace name is required.");
-  }
-
-  const { data, error } = await supabase
-    .from("workspaces")
-    .insert({
-      name: nextName,
-      description: params.description.trim(),
-      color: params.color ?? "var(--primary)",
-      owner_id: params.ownerId,
-      owner_name: params.ownerName.trim(),
-      owner_email: params.ownerEmail.trim().toLowerCase()
-    })
-    .select("id")
-    .single();
-
-  if (error || !data) {
-    throw new Error(toWorkspaceError(error, "Unable to create workspace."));
-  }
-
-  const { error: collaboratorError } = await supabase.from("workspace_collaborators").insert({
-    workspace_id: data.id,
-    user_id: params.ownerId,
-    email: params.ownerEmail.trim().toLowerCase(),
-    display_name: params.ownerName.trim(),
-    role: "owner"
-  });
-
-  if (collaboratorError) {
-    throw new Error(
-      toWorkspaceError(collaboratorError, "Workspace created but collaborator setup failed.")
-    );
-  }
-
-  return data.id as string;
+  return payload.workspaceId;
 }
 
 export async function updateWorkspaceById(
   workspaceId: string,
   next: { name: string; description: string }
 ) {
-  if (!isSupabaseConfigured) {
-    throw new Error("Supabase is not configured.");
-  }
-
-  const { error } = await supabase
-    .from("workspaces")
-    .update({
-      name: next.name.trim(),
-      description: next.description.trim(),
-      updated_at: new Date().toISOString()
-    })
-    .eq("id", workspaceId);
-
-  if (error) {
-    throw new Error(toWorkspaceError(error, "Unable to update workspace."));
-  }
+  await requestJson(
+    `/api/workspaces/${workspaceId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(next)
+    },
+    "Unable to update workspace."
+  );
 }
 
 export async function deleteWorkspaceById(workspaceId: string) {
-  if (!isSupabaseConfigured) {
-    throw new Error("Supabase is not configured.");
-  }
-
-  const { error } = await supabase.from("workspaces").delete().eq("id", workspaceId);
-  if (error) {
-    throw new Error(toWorkspaceError(error, "Unable to delete workspace."));
-  }
+  await requestJson(
+    `/api/workspaces/${workspaceId}`,
+    {
+      method: "DELETE"
+    },
+    "Unable to delete workspace."
+  );
 }
 
 export async function inviteWorkspaceCollaborator(
@@ -265,61 +130,50 @@ export async function inviteWorkspaceCollaborator(
   email: string,
   role: CollaboratorRole
 ) {
-  if (!isSupabaseConfigured) {
-    throw new Error("Supabase is not configured.");
-  }
-
-  const normalizedEmail = email.trim().toLowerCase();
-  const { error } = await supabase.from("workspace_collaborators").insert({
-    workspace_id: workspaceId,
-    email: normalizedEmail,
-    display_name: toDisplayName(normalizedEmail),
-    role
-  });
-
-  if (error) {
-    throw new Error(toWorkspaceError(error, "Unable to invite collaborator."));
-  }
+  await requestJson(
+    `/api/workspaces/${workspaceId}/collaborators`,
+    {
+      method: "POST",
+      body: JSON.stringify({ email, role })
+    },
+    "Unable to invite collaborator."
+  );
 }
 
 export async function removeWorkspaceCollaborator(collaboratorId: string) {
-  if (!isSupabaseConfigured) {
-    throw new Error("Supabase is not configured.");
-  }
-
-  const { error } = await supabase.from("workspace_collaborators").delete().eq("id", collaboratorId);
-  if (error) {
-    throw new Error(toWorkspaceError(error, "Unable to remove collaborator."));
-  }
+  await requestJson(
+    `/api/workspaces/collaborators/${collaboratorId}`,
+    {
+      method: "DELETE"
+    },
+    "Unable to remove collaborator."
+  );
 }
 
 export async function updateWorkspaceCollaboratorRole(
   collaboratorId: string,
   role: Exclude<CollaboratorRole, "owner">
 ) {
-  if (!isSupabaseConfigured) {
-    throw new Error("Supabase is not configured.");
-  }
-
-  const { error } = await supabase
-    .from("workspace_collaborators")
-    .update({
-      role
-    })
-    .eq("id", collaboratorId);
-
-  if (error) {
-    throw new Error(toWorkspaceError(error, "Unable to update collaborator role."));
-  }
+  await requestJson(
+    `/api/workspaces/collaborators/${collaboratorId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ role })
+    },
+    "Unable to update collaborator role."
+  );
 }
 
 export async function fetchWorkspaceNameById(workspaceId: string | null | undefined) {
-  if (!workspaceId || !isSupabaseConfigured) return null;
-  const { data, error } = await supabase
-    .from("workspaces")
-    .select("name")
-    .eq("id", workspaceId)
-    .maybeSingle();
-  if (error || !data) return null;
-  return data.name as string;
+  if (!workspaceId) return null;
+
+  const payload = await requestJson<{ workspace: WorkspaceApiRecord }>(
+    `/api/workspaces/${workspaceId}`,
+    {
+      method: "GET"
+    },
+    "Unable to load workspace."
+  );
+
+  return payload.workspace?.name ?? null;
 }

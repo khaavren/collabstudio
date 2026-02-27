@@ -15,7 +15,6 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/app/context/auth-context";
-import { isSupabaseConfigured } from "@/lib/supabase";
 import { InviteCollaboratorsModal } from "../components/invite-collaborators-modal";
 import { EditWorkspaceModal } from "@/components/EditWorkspaceModal";
 import {
@@ -127,14 +126,6 @@ export function Dashboard() {
     let active = true;
 
     async function load() {
-      if (!isSupabaseConfigured) {
-        if (!active) return;
-        setWorkspaces([]);
-        setError("Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
-        setIsLoadingWorkspaces(false);
-        return;
-      }
-
       if (!user?.id) {
         if (!active) return;
         setWorkspaces([]);
