@@ -65,6 +65,15 @@ function toDisplayName(email: string) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+function toWorkspaceError(error: { message?: string } | null | undefined, fallback: string) {
+  const message = error?.message?.trim();
+  if (!message) return fallback;
+  if (message.toLowerCase().includes("failed to fetch")) {
+    return "Network error: cannot reach Supabase. Verify VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, and internet access.";
+  }
+  return message;
+}
+
 export function getDefaultWorkspaces() {
   return [] as WorkspaceRecord[];
 }
@@ -133,7 +142,7 @@ export async function fetchWorkspacesForUser(params: { userId: string; email: st
     .or(orFilter);
 
   if (memberLookup.error) {
-    throw new Error(memberLookup.error.message || "Unable to load workspaces.");
+    throw new Error(toWorkspaceError(memberLookup.error, "Unable to load workspaces."));
   }
 
   const workspaceIds = Array.from(
@@ -151,13 +160,13 @@ export async function fetchWorkspacesForUser(params: { userId: string; email: st
   ]);
 
   if (workspaceQuery.error) {
-    throw new Error(workspaceQuery.error.message || "Unable to load workspaces.");
+    throw new Error(toWorkspaceError(workspaceQuery.error, "Unable to load workspaces."));
   }
   if (collaboratorQuery.error) {
-    throw new Error(collaboratorQuery.error.message || "Unable to load collaborators.");
+    throw new Error(toWorkspaceError(collaboratorQuery.error, "Unable to load collaborators."));
   }
   if (roomQuery.error) {
-    throw new Error(roomQuery.error.message || "Unable to load rooms.");
+    throw new Error(toWorkspaceError(roomQuery.error, "Unable to load rooms."));
   }
 
   return buildWorkspaceRecords(
@@ -198,7 +207,7 @@ export async function createWorkspaceForUser(params: {
     .single();
 
   if (error || !data) {
-    throw new Error(error?.message || "Unable to create workspace.");
+    throw new Error(toWorkspaceError(error, "Unable to create workspace."));
   }
 
   const { error: collaboratorError } = await supabase.from("workspace_collaborators").insert({
@@ -210,7 +219,9 @@ export async function createWorkspaceForUser(params: {
   });
 
   if (collaboratorError) {
-    throw new Error(collaboratorError.message || "Workspace created but collaborator setup failed.");
+    throw new Error(
+      toWorkspaceError(collaboratorError, "Workspace created but collaborator setup failed.")
+    );
   }
 
   return data.id as string;
@@ -234,7 +245,7 @@ export async function updateWorkspaceById(
     .eq("id", workspaceId);
 
   if (error) {
-    throw new Error(error.message || "Unable to update workspace.");
+    throw new Error(toWorkspaceError(error, "Unable to update workspace."));
   }
 }
 
@@ -245,7 +256,7 @@ export async function deleteWorkspaceById(workspaceId: string) {
 
   const { error } = await supabase.from("workspaces").delete().eq("id", workspaceId);
   if (error) {
-    throw new Error(error.message || "Unable to delete workspace.");
+    throw new Error(toWorkspaceError(error, "Unable to delete workspace."));
   }
 }
 
@@ -267,7 +278,7 @@ export async function inviteWorkspaceCollaborator(
   });
 
   if (error) {
-    throw new Error(error.message || "Unable to invite collaborator.");
+    throw new Error(toWorkspaceError(error, "Unable to invite collaborator."));
   }
 }
 
@@ -278,7 +289,7 @@ export async function removeWorkspaceCollaborator(collaboratorId: string) {
 
   const { error } = await supabase.from("workspace_collaborators").delete().eq("id", collaboratorId);
   if (error) {
-    throw new Error(error.message || "Unable to remove collaborator.");
+    throw new Error(toWorkspaceError(error, "Unable to remove collaborator."));
   }
 }
 
@@ -298,7 +309,7 @@ export async function updateWorkspaceCollaboratorRole(
     .eq("id", collaboratorId);
 
   if (error) {
-    throw new Error(error.message || "Unable to update collaborator role.");
+    throw new Error(toWorkspaceError(error, "Unable to update collaborator role."));
   }
 }
 

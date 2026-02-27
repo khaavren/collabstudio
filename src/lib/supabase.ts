@@ -10,10 +10,23 @@ import type {
 } from "@/lib/types";
 import { hashSeed, placeholderUrl, safeVersionNumber } from "@/lib/utils";
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabaseUrl = String(import.meta.env.VITE_SUPABASE_URL ?? "").trim();
+const supabaseAnonKey = String(import.meta.env.VITE_SUPABASE_ANON_KEY ?? "").trim();
 
-export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
+function isValidSupabaseUrl(value: string) {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "https:" || parsed.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
+export const isSupabaseConfigured = Boolean(
+  supabaseUrl &&
+    supabaseAnonKey &&
+    isValidSupabaseUrl(supabaseUrl)
+);
 
 // Prevent hard crashes when env vars are missing in production builds.
 const fallbackSupabaseUrl = "https://example.supabase.co";
