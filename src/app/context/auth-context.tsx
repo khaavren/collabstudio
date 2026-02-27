@@ -69,13 +69,6 @@ function mapSupabaseUser(user: User): AuthUser {
   };
 }
 
-function getAvatarMetadataValue(user: User | null | undefined) {
-  const metadata = user?.user_metadata;
-  if (!metadata || typeof metadata !== "object") return null;
-  const avatar = (metadata as Record<string, unknown>).avatar_url;
-  return typeof avatar === "string" ? avatar : null;
-}
-
 function avatarNeedsCleanup(avatarUrl: string | null) {
   if (!avatarUrl) return false;
   return avatarUrl.startsWith("data:") || avatarUrl.length > MAX_AVATAR_URL_LENGTH;
@@ -95,18 +88,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (session?.access_token && session.user) {
-      const avatarUrl = getAvatarMetadataValue(session.user);
-      if (avatarNeedsCleanup(avatarUrl)) {
-        const { error: cleanupError } = await supabase.auth.updateUser({
-          data: { avatar_url: null }
-        });
-        if (!cleanupError) {
-          const { data: refreshed } = await supabase.auth.refreshSession();
-          if (refreshed.session?.access_token && refreshed.session.user) {
-            return refreshed.session;
-          }
-        }
-      }
       return session;
     }
 

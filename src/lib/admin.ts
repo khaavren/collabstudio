@@ -52,6 +52,8 @@ export type AdminSettingsResponse = {
   };
 };
 
+const MAX_AUTH_HEADER_TOKEN_LENGTH = 6000;
+
 function normalizeAccessToken(value: unknown) {
   if (typeof value !== "string") return null;
   const token = value.trim();
@@ -63,17 +65,33 @@ function isSafeBearerToken(token: string) {
   return token.split(".").length === 3;
 }
 
+function canSendTokenInHeader(token: string) {
+  return token.length <= MAX_AUTH_HEADER_TOKEN_LENGTH;
+}
+
+async function repairOversizedSessionToken(token: string) {
+  try {
+    const response = await fetch("/api/auth/repair-session", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ accessToken: token })
+    });
+
+    if (!response.ok) return false;
+    const payload = (await response.json().catch(() => ({}))) as { ok?: boolean; repaired?: boolean };
+    return Boolean(payload.ok);
+  } catch {
+    return false;
+  }
+}
+
 async function getAccessToken(options?: { forceRefresh?: boolean }) {
   const shouldForceRefresh = options?.forceRefresh === true;
 
   if (shouldForceRefresh) {
-    const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
-    if (refreshError) return null;
-
-    const refreshedToken = normalizeAccessToken(refreshData.session?.access_token ?? null);
-    if (refreshedToken && isSafeBearerToken(refreshedToken)) {
-      return refreshedToken;
-    }
+    await supabase.auth.refreshSession();
   }
 
   const { data, error } = await supabase.auth.getSession();
@@ -82,15 +100,28 @@ async function getAccessToken(options?: { forceRefresh?: boolean }) {
   }
 
   const token = normalizeAccessToken(data.session?.access_token ?? null);
-  if (token && isSafeBearerToken(token)) return token;
+  if (token && isSafeBearerToken(token)) {
+    if (canSendTokenInHeader(token)) return token;
+    await repairOversizedSessionToken(token);
+  }
 
   // Recover from stale/corrupted local auth state without making a broken API request.
   const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
   if (refreshError) return null;
 
   const refreshedToken = normalizeAccessToken(refreshData.session?.access_token ?? null);
-  if (!refreshedToken) return null;
-  return isSafeBearerToken(refreshedToken) ? refreshedToken : null;
+  if (!refreshedToken || !isSafeBearerToken(refreshedToken)) return null;
+  if (canSendTokenInHeader(refreshedToken)) return refreshedToken;
+
+  const repaired = await repairOversizedSessionToken(refreshedToken);
+  if (!repaired) return null;
+
+  const { data: finalRefresh, error: finalRefreshError } = await supabase.auth.refreshSession();
+  if (finalRefreshError) return null;
+
+  const finalToken = normalizeAccessToken(finalRefresh.session?.access_token ?? null);
+  if (!finalToken || !isSafeBearerToken(finalToken)) return null;
+  return canSendTokenInHeader(finalToken) ? finalToken : null;
 }
 
 export async function fetchWithAuth(input: string, init?: RequestInit, options?: { forceRefresh?: boolean }) {
