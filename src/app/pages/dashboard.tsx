@@ -9,13 +9,20 @@ import {
   Plus,
   Sparkles,
   UserCircle2,
+  UserPlus,
   Users
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/app/context/auth-context";
+import { InviteCollaboratorsModal } from "../components/invite-collaborators-modal";
 import { EditWorkspaceModal } from "@/components/EditWorkspaceModal";
-import { loadWorkspaces, saveWorkspaces, type WorkspaceRecord } from "@/lib/workspaces";
+import {
+  loadWorkspaces,
+  saveWorkspaces,
+  type CollaboratorRecord,
+  type WorkspaceRecord
+} from "@/lib/workspaces";
 
 type Activity = {
   id: string;
@@ -68,6 +75,8 @@ export function Dashboard() {
   const menuRef = useRef<HTMLDivElement>(null);
   const [workspaces, setWorkspaces] = useState<WorkspaceRecord[]>(() => loadWorkspaces());
   const [editingWorkspace, setEditingWorkspace] = useState<WorkspaceRecord | null>(null);
+  const [invitingCollaboratorsWorkspace, setInvitingCollaboratorsWorkspace] =
+    useState<WorkspaceRecord | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
   const currentUserId = user?.id ?? "1";
@@ -76,6 +85,10 @@ export function Dashboard() {
 
   const ownedWorkspaces = workspaces.filter((workspace) => workspace.owner === currentUserId);
   const sharedWorkspaces = workspaces.filter((workspace) => workspace.owner !== currentUserId);
+  const activeInvitingWorkspace =
+    invitingCollaboratorsWorkspace !== null
+      ? workspaces.find((workspace) => workspace.id === invitingCollaboratorsWorkspace.id) ?? null
+      : null;
 
   const totalRooms = workspaces.reduce((sum, workspace) => sum + workspace.roomCount, 0);
 
@@ -172,6 +185,76 @@ export function Dashboard() {
 
     setWorkspaces((current) => current.filter((workspace) => workspace.id !== editingWorkspace.id));
     setEditingWorkspace(null);
+  }
+
+  function handleInviteCollaborator(email: string, role: string) {
+    if (!activeInvitingWorkspace) return;
+
+    const normalizedRole =
+      role === "admin" || role === "editor" || role === "viewer" ? role : "viewer";
+    const generatedName = email
+      .split("@")[0]
+      .replace(/[._-]/g, " ")
+      .replace(/\b\w/g, (letter) => letter.toUpperCase());
+    const newCollaborator: CollaboratorRecord = {
+      id: Date.now().toString(),
+      name: generatedName,
+      email,
+      role: normalizedRole
+    };
+
+    setWorkspaces((previous) =>
+      previous.map((workspace) =>
+        workspace.id === activeInvitingWorkspace.id
+          ? {
+              ...workspace,
+              collaboratorsList: [...workspace.collaboratorsList, newCollaborator],
+              collaborators: workspace.collaborators + 1
+            }
+          : workspace
+      )
+    );
+  }
+
+  function handleRemoveCollaborator(collaboratorId: string) {
+    if (!activeInvitingWorkspace) return;
+
+    setWorkspaces((previous) =>
+      previous.map((workspace) => {
+        if (workspace.id !== activeInvitingWorkspace.id) return workspace;
+
+        const target = workspace.collaboratorsList.find((collaborator) => collaborator.id === collaboratorId);
+        if (!target || target.role === "owner") return workspace;
+
+        return {
+          ...workspace,
+          collaboratorsList: workspace.collaboratorsList.filter(
+            (collaborator) => collaborator.id !== collaboratorId
+          ),
+          collaborators: Math.max(workspace.collaborators - 1, 0)
+        };
+      })
+    );
+  }
+
+  function handleRoleChange(collaboratorId: string, newRole: string) {
+    if (!activeInvitingWorkspace) return;
+    if (newRole !== "admin" && newRole !== "editor" && newRole !== "viewer") return;
+
+    setWorkspaces((previous) =>
+      previous.map((workspace) =>
+        workspace.id === activeInvitingWorkspace.id
+          ? {
+              ...workspace,
+              collaboratorsList: workspace.collaboratorsList.map((collaborator) =>
+                collaborator.id === collaboratorId && collaborator.role !== "owner"
+                  ? { ...collaborator, role: newRole }
+                  : collaborator
+              )
+            }
+          : workspace
+      )
+    );
   }
 
   return (
@@ -285,7 +368,7 @@ export function Dashboard() {
                 to={`/workspace/${workspace.id}/room/hard-hat-system`}
               >
                 <button
-                  className="absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--card)] text-[var(--muted-foreground)] opacity-0 shadow-sm transition hover:bg-[var(--accent)] hover:text-[var(--foreground)] group-hover:opacity-100"
+                  className="absolute right-16 top-3 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--card)] text-[var(--muted-foreground)] opacity-0 shadow-sm transition hover:bg-[var(--accent)] hover:text-[var(--foreground)] group-hover:opacity-100"
                   onClick={(event) => {
                     event.preventDefault();
                     event.stopPropagation();
@@ -295,6 +378,18 @@ export function Dashboard() {
                   type="button"
                 >
                   <Pencil className="h-4 w-4" />
+                </button>
+                <button
+                  className="absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--card)] text-[var(--muted-foreground)] opacity-0 shadow-sm transition hover:bg-[var(--accent)] hover:text-[var(--foreground)] group-hover:opacity-100"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setInvitingCollaboratorsWorkspace(workspace);
+                  }}
+                  title="Invite collaborators"
+                  type="button"
+                >
+                  <UserPlus className="h-4 w-4" />
                 </button>
 
                 <div
@@ -459,6 +554,18 @@ export function Dashboard() {
         workspaceDescription={editingWorkspace?.description ?? ""}
         workspaceName={editingWorkspace?.name ?? ""}
       />
+
+      {activeInvitingWorkspace ? (
+        <InviteCollaboratorsModal
+          currentCollaborators={activeInvitingWorkspace.collaboratorsList}
+          onClose={() => setInvitingCollaboratorsWorkspace(null)}
+          onInvite={handleInviteCollaborator}
+          onRemove={handleRemoveCollaborator}
+          onRoleChange={handleRoleChange}
+          workspaceId={activeInvitingWorkspace.id}
+          workspaceName={activeInvitingWorkspace.name}
+        />
+      ) : null}
     </div>
   );
 }
