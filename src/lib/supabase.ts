@@ -255,7 +255,7 @@ async function requestGeneratedOutput(
   prompt: string,
   size: string,
   sourceImageUrl?: string | null,
-  generationMode: "force_image" | "image" | "auto" = "force_image",
+  generationMode: "force_image" | "image" | "auto" = "auto",
   conversationContext?: Array<{ role: "user" | "assistant"; content: string }>
 ) {
   const fallback = placeholderUrl(prompt, size);
@@ -386,7 +386,7 @@ async function uploadImageToStorage(
   size: string,
   file?: File | null,
   sourceImageUrl?: string | null,
-  generationMode: "force_image" | "image" | "auto" = "force_image",
+  generationMode: "force_image" | "image" | "auto" = "auto",
   conversationContext?: Array<{ role: "user" | "assistant"; content: string }>
 ): Promise<GeneratedOutput> {
   const uploadedReferenceUrl = file ? await uploadBlobToStorage(file, "references") : null;
@@ -462,6 +462,24 @@ function inferTags(style: string, title: string) {
   return [...new Set(tags)];
 }
 
+function buildTextCoverDataUrl(title: string) {
+  const safeTitle = title.trim().slice(0, 72) || "Conversation";
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="768" viewBox="0 0 1024 768">
+  <rect width="1024" height="768" fill="#f3f2ef"/>
+  <rect x="56" y="56" width="912" height="656" rx="24" fill="#ffffff" stroke="rgba(55,53,47,0.12)"/>
+  <text x="96" y="170" font-size="40" font-family="Inter, system-ui, -apple-system, sans-serif" font-weight="600" fill="#37352f">Text Response</text>
+  <text x="96" y="240" font-size="28" font-family="Inter, system-ui, -apple-system, sans-serif" fill="#787774">${safeTitle
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")}</text>
+  <rect x="96" y="300" width="832" height="14" rx="7" fill="#e9e8e5"/>
+  <rect x="96" y="338" width="760" height="14" rx="7" fill="#e9e8e5"/>
+  <rect x="96" y="376" width="804" height="14" rx="7" fill="#e9e8e5"/>
+  <rect x="96" y="414" width="716" height="14" rx="7" fill="#e9e8e5"/>
+</svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
 export async function generateAssetVersion(options: {
   activeAsset?: Asset;
   editor?: string;
@@ -483,7 +501,7 @@ export async function generateAssetVersion(options: {
     prompt,
     referenceFile,
     sourceImageUrl,
-    generationMode = "force_image",
+    generationMode = "auto",
     conversationContext,
     roomId,
     size,
@@ -507,9 +525,7 @@ export async function generateAssetVersion(options: {
   let asset = activeAsset;
 
   if (!asset) {
-    if (!imageUrl) {
-      throw new Error("Image generation is required to create a new project.");
-    }
+    const initialCoverUrl = imageUrl ?? buildTextCoverDataUrl(title);
 
     const initialVersion = "v1";
     const { data: createdAsset, error: assetError } = await supabase
@@ -518,7 +534,7 @@ export async function generateAssetVersion(options: {
         room_id: roomId,
         title,
         current_version: initialVersion,
-        image_url: imageUrl,
+        image_url: initialCoverUrl,
         edited_by: resolvedEditor
       })
       .select("*")
@@ -592,7 +608,7 @@ export async function generateAssetVersion(options: {
     .update({
       title,
       current_version: nextVersion,
-      image_url: imageUrl ?? asset.image_url,
+      image_url: imageUrl ?? asset.image_url ?? buildTextCoverDataUrl(title),
       edited_by: resolvedEditor,
       updated_at: new Date().toISOString()
     })

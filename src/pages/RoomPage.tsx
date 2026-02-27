@@ -408,7 +408,7 @@ export function RoomPage() {
         notes: input.notes,
         referenceFile: input.referenceFile,
         sourceImageUrl,
-        generationMode: input.generationMode ?? "force_image",
+        generationMode: input.generationMode ?? "auto",
         conversationContext: input.conversationContext
       });
 
