@@ -159,13 +159,19 @@ export async function getAuthenticatedUser(req) {
   }
 
   const authClient = getSupabaseServerAuthClient();
-  const { data, error } = await authClient.auth.getUser(token);
-
-  if (error || !data.user) {
-    throw new HttpError("Invalid auth token.", 401);
+  const primaryResult = await authClient.auth.getUser(token);
+  if (!primaryResult.error && primaryResult.data.user) {
+    return primaryResult.data.user;
   }
 
-  return data.user;
+  // Fallback for deployments where anon-key env wiring is stale but service-role is valid.
+  const adminClient = getSupabaseAdminClient();
+  const fallbackResult = await adminClient.auth.getUser(token);
+  if (!fallbackResult.error && fallbackResult.data.user) {
+    return fallbackResult.data.user;
+  }
+
+  throw new HttpError("Invalid auth token.", 401);
 }
 
 export async function getPrimaryMembership(userId) {
