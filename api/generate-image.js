@@ -1070,7 +1070,7 @@ export default async function handler(req, res) {
           }
 
           const defaultParams = readSafeDefaultParams(apiSetting.default_params);
-          if (requestedMode !== "force_image" && providerUsed === "OpenAI") {
+          if (requestedMode === "auto" && outputMode === "image" && providerUsed === "OpenAI") {
             outputMode = await classifyOpenAiOutputMode({
               apiKey: key,
               model: modelUsed,
