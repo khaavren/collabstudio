@@ -46,7 +46,8 @@ const defaultGenerate: GenerateInput = {
   style: "Product Photography",
   size: "1024x1024",
   notes: "",
-  referenceFile: null
+  referenceFile: null,
+  generationMode: "auto"
 };
 
 export function RoomPage() {
