@@ -47,11 +47,18 @@ export function ProfilePage() {
     setProfileMessageTone(null);
 
     try {
+      const selectedAvatar =
+        typeof avatarUrl === "string" && avatarUrl.startsWith("data:") ? null : avatarUrl;
       await updateUser({
         name: displayName.trim() || (user?.email?.split("@")[0] ?? "Member"),
-        avatarUrl
+        avatarUrl: selectedAvatar
       });
-      setProfileMessage("Profile updated.");
+      if (selectedAvatar === null && typeof avatarUrl === "string" && avatarUrl.startsWith("data:")) {
+        setAvatarUrl(null);
+        setProfileMessage("Profile updated. Avatar file uploads are not supported yet.");
+      } else {
+        setProfileMessage("Profile updated.");
+      }
       setProfileMessageTone("success");
     } catch (caught) {
       setProfileMessage(caught instanceof Error ? caught.message : "Unable to update profile.");

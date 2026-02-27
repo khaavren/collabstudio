@@ -22,6 +22,7 @@ type AuthContextValue = {
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+const MAX_AVATAR_URL_LENGTH = 2048;
 
 function toInitials(name: string, email: string) {
   const fromName = name
@@ -68,6 +69,18 @@ function mapSupabaseUser(user: User): AuthUser {
   };
 }
 
+function getAvatarMetadataValue(user: User | null | undefined) {
+  const metadata = user?.user_metadata;
+  if (!metadata || typeof metadata !== "object") return null;
+  const avatar = (metadata as Record<string, unknown>).avatar_url;
+  return typeof avatar === "string" ? avatar : null;
+}
+
+function avatarNeedsCleanup(avatarUrl: string | null) {
+  if (!avatarUrl) return false;
+  return avatarUrl.startsWith("data:") || avatarUrl.length > MAX_AVATAR_URL_LENGTH;
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
 
@@ -82,6 +95,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (session?.access_token && session.user) {
+      const avatarUrl = getAvatarMetadataValue(session.user);
+      if (avatarNeedsCleanup(avatarUrl)) {
+        const { error: cleanupError } = await supabase.auth.updateUser({
+          data: { avatar_url: null }
+        });
+        if (!cleanupError) {
+          const { data: refreshed } = await supabase.auth.refreshSession();
+          if (refreshed.session?.access_token && refreshed.session.user) {
+            return refreshed.session;
+          }
+        }
+      }
       return session;
     }
 
@@ -238,7 +263,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       payload.full_name = next.name.trim();
     }
     if (typeof next.avatarUrl !== "undefined") {
-      payload.avatar_url = next.avatarUrl;
+      if (typeof next.avatarUrl === "string") {
+        const trimmedAvatar = next.avatarUrl.trim();
+        if (!trimmedAvatar) {
+          payload.avatar_url = null;
+        } else if (avatarNeedsCleanup(trimmedAvatar)) {
+          throw new Error("Avatar image is too large. Use an image URL instead of a file upload.");
+        } else {
+          payload.avatar_url = trimmedAvatar;
+        }
+      } else {
+        payload.avatar_url = null;
+      }
     }
 
     const { data, error } = await supabase.auth.updateUser({
