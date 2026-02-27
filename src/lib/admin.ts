@@ -66,7 +66,19 @@ function isSafeBearerToken(token: string) {
   return token.split(".").length === 3;
 }
 
-async function getAccessToken() {
+async function getAccessToken(options?: { forceRefresh?: boolean }) {
+  const shouldForceRefresh = options?.forceRefresh === true;
+
+  if (shouldForceRefresh) {
+    const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+    if (refreshError) return null;
+
+    const refreshedToken = normalizeAccessToken(refreshData.session?.access_token ?? null);
+    if (refreshedToken && isSafeBearerToken(refreshedToken)) {
+      return refreshedToken;
+    }
+  }
+
   const { data, error } = await supabase.auth.getSession();
   if (error) {
     throw new Error(error.message);
@@ -84,8 +96,8 @@ async function getAccessToken() {
   return isSafeBearerToken(refreshedToken) ? refreshedToken : null;
 }
 
-export async function fetchWithAuth(input: string, init?: RequestInit) {
-  const token = await getAccessToken();
+export async function fetchWithAuth(input: string, init?: RequestInit, options?: { forceRefresh?: boolean }) {
+  const token = await getAccessToken(options);
   const headers = new Headers(init?.headers ?? {});
 
   if (token) {

@@ -1,5 +1,4 @@
 import { fetchWithAuth } from "@/lib/admin";
-import { supabase } from "@/lib/supabase";
 import { timeAgo } from "@/lib/utils";
 
 export type CollaboratorRole = "owner" | "admin" | "editor" | "viewer";
@@ -48,11 +47,21 @@ async function requestJson<T>(input: string, init?: RequestInit, fallbackError =
     throw new Error("Network error: unable to reach application API.");
   }
 
+  if (response.status === 401) {
+    try {
+      response = await fetchWithAuth(input, init, { forceRefresh: true });
+    } catch (error) {
+      if (error instanceof Error && error.message.trim()) {
+        throw new Error(error.message);
+      }
+      throw new Error("Unable to refresh your session. Please sign in again.");
+    }
+  }
+
   const payload = (await response.json().catch(() => ({}))) as T & { error?: string };
   if (!response.ok) {
     if (response.status === 401) {
-      void supabase.auth.signOut({ scope: "local" });
-      throw new Error("Session expired. Please sign in again.");
+      throw new Error(toUserError(payload, "Authentication failed. Please sign in again."));
     }
     throw new Error(toUserError(payload, fallbackError));
   }
