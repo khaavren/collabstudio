@@ -98,6 +98,9 @@ async function getAccessToken(options?: { forceRefresh?: boolean }) {
 
 export async function fetchWithAuth(input: string, init?: RequestInit, options?: { forceRefresh?: boolean }) {
   const token = await getAccessToken(options);
+  if (!token) {
+    throw new Error("Authentication token unavailable. Please sign in again.");
+  }
   const headers = new Headers(init?.headers ?? {});
 
   if (token) {

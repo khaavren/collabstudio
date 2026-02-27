@@ -71,6 +71,33 @@ function mapSupabaseUser(user: User): AuthUser {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
 
+  async function resolveActiveSession() {
+    const {
+      data: { session },
+      error
+    } = await supabase.auth.getSession();
+
+    if (error) {
+      throw new Error(error.message || "Unable to read auth session.");
+    }
+
+    if (session?.access_token && session.user) {
+      return session;
+    }
+
+    const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+    if (refreshError) {
+      return null;
+    }
+
+    const refreshedSession = refreshData.session;
+    if (refreshedSession?.access_token && refreshedSession.user) {
+      return refreshedSession;
+    }
+
+    return null;
+  }
+
   useEffect(() => {
     if (!isSupabaseConfigured) {
       setUser(null);
@@ -80,11 +107,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let active = true;
 
     async function syncSession() {
-      const {
-        data: { session }
-      } = await supabase.auth.getSession();
+      const session = await resolveActiveSession();
       if (!active) return;
-      setUser(session?.user ? mapSupabaseUser(session.user) : null);
+      setUser(session?.user && session.access_token ? mapSupabaseUser(session.user) : null);
     }
 
     void syncSession();
@@ -93,7 +118,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       data: { subscription }
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!active) return;
-      setUser(session?.user ? mapSupabaseUser(session.user) : null);
+      setUser(session?.user && session.access_token ? mapSupabaseUser(session.user) : null);
     });
 
     return () => {
@@ -111,7 +136,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error("Supabase is not configured.");
     }
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email: cleanEmail,
       password
     });
@@ -119,6 +144,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) {
       throw new Error(error.message || "Unable to sign in.");
     }
+
+    const session = data.session ?? (await resolveActiveSession());
+    if (!session?.access_token || !session.user) {
+      throw new Error("Signed in, but session token could not be established. Please try again.");
+    }
+
+    setUser(mapSupabaseUser(session.user));
   }
 
   async function signup(name: string, email: string, password: string) {
@@ -218,7 +250,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (data.user) {
-      setUser(mapSupabaseUser(data.user));
+      const session = await resolveActiveSession();
+      setUser(session?.user && session.access_token ? mapSupabaseUser(session.user) : null);
     }
   }
 
