@@ -46,6 +46,7 @@ type ConversationMessage =
       author: string;
       timestamp: string;
       content: string;
+      outputType: "image" | "text";
       size: string;
       style: string;
     }
@@ -97,10 +98,12 @@ function PromptMessage({ message }: { message: Extract<ConversationMessage, { ty
 
         <div className="max-w-3xl rounded-2xl rounded-tl-sm bg-[color-mix(in_srgb,var(--accent)_70%,white)] px-4 py-3">
           <p className="text-sm leading-relaxed text-[var(--foreground)]">{message.content}</p>
-          <div className="mt-2 flex gap-4 border-t border-[var(--border)] pt-2 text-xs text-[var(--muted-foreground)]">
-            <span>Size: {message.size}</span>
-            <span>Style: {message.style}</span>
-          </div>
+          {message.outputType === "image" ? (
+            <div className="mt-2 flex gap-4 border-t border-[var(--border)] pt-2 text-xs text-[var(--muted-foreground)]">
+              <span>Size: {message.size}</span>
+              <span>Style: {message.style}</span>
+            </div>
+          ) : null}
         </div>
       </div>
     </div>
@@ -435,6 +438,7 @@ export function AssetDetailView({
           author: version.editor,
           timestamp: formatTimestamp(version.created_at),
           content: version.prompt,
+          outputType: outputType === "text" ? "text" : "image",
           size: version.size,
           style: version.style
         },
