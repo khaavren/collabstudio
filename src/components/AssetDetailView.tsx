@@ -427,6 +427,24 @@ function ImageLightbox({ imageUrl, onClose }: { imageUrl: string; onClose: () =>
   );
 }
 
+function ThinkingMessage() {
+  return (
+    <div className="flex items-start gap-3">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--primary)_20%,white)]">
+        <Sparkles className="h-4 w-4 animate-pulse text-[var(--primary)]" />
+      </div>
+      <div className="flex-1 space-y-2">
+        <div className="flex items-baseline gap-2">
+          <span className="text-sm font-medium text-[var(--foreground)]">AI Assistant</span>
+        </div>
+        <div className="max-w-2xl rounded-xl border border-[var(--border)] bg-[var(--card)] px-4 py-3 text-sm text-[var(--muted-foreground)]">
+          Thinking...
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function AssetDetailView({
   activeVersionId,
   annotations,
@@ -631,6 +649,7 @@ export function AssetDetailView({
                   </div>
                 )
               )}
+              {isSendingPrompt ? <ThinkingMessage /> : null}
               <div ref={conversationBottomRef} />
             </div>
           </div>
