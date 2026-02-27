@@ -108,7 +108,9 @@ export function SiteTopNav() {
                     </Link>
                     <button
                       className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-[var(--foreground)] transition hover:bg-[var(--accent)]"
-                      onClick={logout}
+                      onClick={() => {
+                        void logout();
+                      }}
                       role="menuitem"
                       type="button"
                     >

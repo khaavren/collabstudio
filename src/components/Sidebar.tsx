@@ -25,8 +25,8 @@ export function Sidebar({
   onSelectRoom,
   rooms,
   workspaceName = "Workspace",
-  userName = "Phil",
-  userSubtitle = "Product Lead"
+  userName = "Member",
+  userSubtitle = "Workspace member"
 }: SidebarProps) {
   const navigate = useNavigate();
   const { logout } = useAuth();
@@ -44,8 +44,8 @@ export function Sidebar({
     return onDeleteRoom(editingRoom);
   }
 
-  function handleLogout() {
-    logout();
+  async function handleLogout() {
+    await logout();
     navigate("/", { replace: true });
   }
 
@@ -148,7 +148,9 @@ export function Sidebar({
             </Link>
             <button
               className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)] px-2 py-1.5 text-xs text-[var(--foreground)] transition hover:bg-[var(--accent)]"
-              onClick={handleLogout}
+              onClick={() => {
+                void handleLogout();
+              }}
               type="button"
             >
               <LogOut className="h-3.5 w-3.5" />

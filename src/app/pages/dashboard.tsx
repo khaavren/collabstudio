@@ -12,7 +12,7 @@ import {
   UserPlus,
   Users
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/app/context/auth-context";
 import { InviteCollaboratorsModal } from "../components/invite-collaborators-modal";
@@ -34,35 +34,7 @@ type Activity = {
   user: string;
 };
 
-const activities: Activity[] = [
-  {
-    id: "a1",
-    type: "asset",
-    title: "Hard Hat v3",
-    workspace: "Product Development",
-    action: "Updated with new iteration",
-    time: "2 hours ago",
-    user: "John Doe"
-  },
-  {
-    id: "a2",
-    type: "comment",
-    title: "Safety Vest Design",
-    workspace: "Product Development",
-    action: "Added comment",
-    time: "5 hours ago",
-    user: "Jane Smith"
-  },
-  {
-    id: "a3",
-    type: "room",
-    title: "New Room: Gloves",
-    workspace: "Industrial Series",
-    action: "Created room",
-    time: "1 day ago",
-    user: "Mike Johnson"
-  }
-];
+const activities: Activity[] = [];
 
 function activityIcon(type: Activity["type"]) {
   if (type === "asset") return History;
@@ -80,8 +52,8 @@ export function Dashboard() {
     useState<WorkspaceRecord | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const currentUserId = user?.id ?? "1";
-  const currentUserName = user?.name ?? "John Doe";
+  const currentUserId = user?.id ?? "";
+  const currentUserName = user?.name?.trim() || (user?.email ? user.email.split("@")[0] : "Member");
   const firstName = currentUserName.split(" ")[0] || "there";
 
   const ownedWorkspaces = workspaces.filter((workspace) => workspace.owner === currentUserId);
@@ -92,6 +64,16 @@ export function Dashboard() {
       : null;
 
   const totalRooms = workspaces.reduce((sum, workspace) => sum + workspace.roomCount, 0);
+  const totalTeamMembers = useMemo(() => {
+    const unique = new Set<string>();
+    workspaces.forEach((workspace) => {
+      workspace.collaboratorsList.forEach((collaborator) => {
+        const key = collaborator.email.trim().toLowerCase() || collaborator.id;
+        if (key) unique.add(key);
+      });
+    });
+    return unique.size;
+  }, [workspaces]);
 
   const stats = [
     {
@@ -106,7 +88,7 @@ export function Dashboard() {
     },
     {
       label: "Team Members",
-      value: 8,
+      value: totalTeamMembers,
       icon: Users
     },
     {
@@ -204,6 +186,7 @@ export function Dashboard() {
   }
 
   function handleCreateWorkspace() {
+    if (!currentUserId) return;
     const nowId = Date.now().toString();
     const existingCount = ownedWorkspaces.length;
     const newWorkspace: WorkspaceRecord = {
@@ -217,7 +200,7 @@ export function Dashboard() {
         {
           id: currentUserId,
           name: currentUserName,
-          email: user?.email ?? "owner@example.com",
+          email: user?.email ?? "",
           role: "owner"
         }
       ],
@@ -350,7 +333,9 @@ export function Dashboard() {
                   </Link>
                   <button
                     className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-[var(--foreground)] transition hover:bg-[var(--accent)]"
-                    onClick={logout}
+                    onClick={() => {
+                      void logout();
+                    }}
                     role="menuitem"
                     type="button"
                   >
@@ -542,31 +527,37 @@ export function Dashboard() {
           </div>
 
           <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--card)]">
-            {activities.map((activity, index) => {
-              const Icon = activityIcon(activity.type);
-              return (
-                <article
-                  className={`flex items-start justify-between gap-3 px-4 py-4 ${
-                    index < activities.length - 1 ? "border-b border-[var(--border)]" : ""
-                  }`}
-                  key={activity.id}
-                >
-                  <div className="flex items-start gap-3">
-                    <span className="mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--accent)] text-[var(--primary)]">
-                      <Icon className="h-4 w-4" />
-                    </span>
-                    <div>
-                      <p className="text-base font-medium text-[var(--foreground)]">{activity.title}</p>
-                      <p className="text-sm text-[var(--muted-foreground)]">
-                        {activity.user} {activity.action}
-                      </p>
-                      <p className="text-xs text-[var(--muted-foreground)]">{activity.workspace}</p>
+            {activities.length > 0 ? (
+              activities.map((activity, index) => {
+                const Icon = activityIcon(activity.type);
+                return (
+                  <article
+                    className={`flex items-start justify-between gap-3 px-4 py-4 ${
+                      index < activities.length - 1 ? "border-b border-[var(--border)]" : ""
+                    }`}
+                    key={activity.id}
+                  >
+                    <div className="flex items-start gap-3">
+                      <span className="mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--accent)] text-[var(--primary)]">
+                        <Icon className="h-4 w-4" />
+                      </span>
+                      <div>
+                        <p className="text-base font-medium text-[var(--foreground)]">{activity.title}</p>
+                        <p className="text-sm text-[var(--muted-foreground)]">
+                          {activity.user} {activity.action}
+                        </p>
+                        <p className="text-xs text-[var(--muted-foreground)]">{activity.workspace}</p>
+                      </div>
                     </div>
-                  </div>
-                  <p className="text-xs text-[var(--muted-foreground)]">{activity.time}</p>
-                </article>
-              );
-            })}
+                    <p className="text-xs text-[var(--muted-foreground)]">{activity.time}</p>
+                  </article>
+                );
+              })
+            ) : (
+              <div className="px-4 py-6 text-sm text-[var(--muted-foreground)]">
+                No recent activity yet.
+              </div>
+            )}
           </div>
         </section>
 

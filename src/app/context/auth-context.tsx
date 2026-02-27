@@ -1,4 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import type { User } from "@supabase/supabase-js";
+import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
 type AuthUser = {
   id: string;
@@ -14,11 +16,10 @@ type AuthContextValue = {
   login: (email: string, password: string) => Promise<void>;
   signup: (name: string, email: string, password: string) => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
-  logout: () => void;
-  updateUser: (next: Partial<AuthUser>) => void;
+  logout: () => Promise<void>;
+  updateUser: (next: Partial<AuthUser>) => Promise<void>;
 };
 
-const AUTH_STORAGE_KEY = "magisterludi.auth.user";
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 function toInitials(name: string, email: string) {
@@ -35,13 +36,34 @@ function toInitials(name: string, email: string) {
   return fallback || "U";
 }
 
-function buildMockUser(name: string, email: string): AuthUser {
+function firstNonEmptyString(...values: unknown[]) {
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    const trimmed = value.trim();
+    if (trimmed.length > 0) return trimmed;
+  }
+  return null;
+}
+
+function mapSupabaseUser(user: User): AuthUser {
+  const metadata = user.user_metadata && typeof user.user_metadata === "object" ? user.user_metadata : {};
+  const inferredName =
+    firstNonEmptyString(
+      (metadata as Record<string, unknown>).full_name,
+      (metadata as Record<string, unknown>).name,
+      (metadata as Record<string, unknown>).display_name
+    ) ??
+    (user.email ? user.email.split("@")[0] : null) ??
+    "Member";
+  const email = user.email ?? "";
+  const avatarValue = (metadata as Record<string, unknown>).avatar_url;
+
   return {
-    id: "1",
-    name: name.trim() || email.split("@")[0] || "User",
-    email: email.trim().toLowerCase(),
-    initials: toInitials(name, email),
-    avatarUrl: null
+    id: user.id,
+    name: inferredName,
+    email,
+    initials: toInitials(inferredName, email),
+    avatarUrl: typeof avatarValue === "string" && avatarValue.trim().length > 0 ? avatarValue : null
   };
 }
 
@@ -49,52 +71,86 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
 
   useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(AUTH_STORAGE_KEY);
-      if (!raw) return;
-
-      const parsed = JSON.parse(raw) as AuthUser;
-      if (!parsed?.id || !parsed?.email) return;
-      setUser(parsed);
-    } catch {
-      window.localStorage.removeItem(AUTH_STORAGE_KEY);
-    }
-  }, []);
-
-  function persist(nextUser: AuthUser | null) {
-    setUser(nextUser);
-    if (!nextUser) {
-      window.localStorage.removeItem(AUTH_STORAGE_KEY);
+    if (!isSupabaseConfigured) {
+      setUser(null);
       return;
     }
-    window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(nextUser));
-  }
 
-  async function login(email: string, _password: string) {
-    const cleanEmail = email.trim().toLowerCase();
-    if (!cleanEmail) {
-      throw new Error("Email is required.");
+    let active = true;
+
+    async function syncSession() {
+      const {
+        data: { session }
+      } = await supabase.auth.getSession();
+      if (!active) return;
+      setUser(session?.user ? mapSupabaseUser(session.user) : null);
     }
 
-    const inferredName = cleanEmail.split("@")[0] || "User";
-    const nextUser = buildMockUser(inferredName, cleanEmail);
-    persist(nextUser);
+    void syncSession();
+
+    const {
+      data: { subscription }
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!active) return;
+      setUser(session?.user ? mapSupabaseUser(session.user) : null);
+    });
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  async function login(email: string, password: string) {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail || !password.trim()) {
+      throw new Error("Email and password are required.");
+    }
+    if (!isSupabaseConfigured) {
+      throw new Error("Supabase is not configured.");
+    }
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email: cleanEmail,
+      password
+    });
+
+    if (error) {
+      throw new Error(error.message || "Unable to sign in.");
+    }
   }
 
-  async function signup(name: string, email: string, _password: string) {
+  async function signup(name: string, email: string, password: string) {
     const cleanEmail = email.trim().toLowerCase();
     const cleanName = name.trim();
 
     if (!cleanName) {
       throw new Error("Name is required.");
     }
-
-    if (!cleanEmail) {
-      throw new Error("Email is required.");
+    if (!cleanEmail || !password.trim()) {
+      throw new Error("Email and password are required.");
+    }
+    if (!isSupabaseConfigured) {
+      throw new Error("Supabase is not configured.");
     }
 
-    const nextUser = buildMockUser(cleanName, cleanEmail);
-    persist(nextUser);
+    const { data, error } = await supabase.auth.signUp({
+      email: cleanEmail,
+      password,
+      options: {
+        data: {
+          full_name: cleanName
+        }
+      }
+    });
+
+    if (error) {
+      throw new Error(error.message || "Unable to sign up.");
+    }
+
+    if (!data.session) {
+      throw new Error("Account created. Check your email to confirm, then log in.");
+    }
   }
 
   async function resetPassword(email: string) {
@@ -102,24 +158,61 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!cleanEmail) {
       throw new Error("Email is required.");
     }
+    if (!isSupabaseConfigured) {
+      throw new Error("Supabase is not configured.");
+    }
+
+    const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+      redirectTo: `${window.location.origin}/login`
+    });
+    if (error) {
+      throw new Error(error.message || "Unable to send reset email.");
+    }
   }
 
-  function logout() {
-    persist(null);
+  async function logout() {
+    if (!isSupabaseConfigured) {
+      setUser(null);
+      return;
+    }
+
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      throw new Error(error.message || "Unable to sign out.");
+    }
   }
 
-  function updateUser(next: Partial<AuthUser>) {
+  async function updateUser(next: Partial<AuthUser>) {
     if (!user) return;
 
-    const merged = {
-      ...user,
-      ...next
-    };
-    const finalized = {
-      ...merged,
-      initials: toInitials(merged.name, merged.email)
-    };
-    persist(finalized);
+    if (!isSupabaseConfigured) {
+      const merged = { ...user, ...next };
+      setUser({
+        ...merged,
+        initials: toInitials(merged.name, merged.email)
+      });
+      return;
+    }
+
+    const payload: Record<string, unknown> = {};
+    if (typeof next.name === "string") {
+      payload.full_name = next.name.trim();
+    }
+    if (typeof next.avatarUrl !== "undefined") {
+      payload.avatar_url = next.avatarUrl;
+    }
+
+    const { data, error } = await supabase.auth.updateUser({
+      data: payload
+    });
+
+    if (error) {
+      throw new Error(error.message || "Unable to update profile.");
+    }
+
+    if (data.user) {
+      setUser(mapSupabaseUser(data.user));
+    }
   }
 
   const value = useMemo<AuthContextValue>(

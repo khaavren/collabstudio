@@ -39,13 +39,17 @@ export function ProfilePage() {
     setIsSaving(true);
     setMessage(null);
 
-    updateUser({
-      name: displayName.trim() || (user?.email?.split("@")[0] ?? "User"),
-      avatarUrl
-    });
-
-    setMessage("Profile updated.");
-    setIsSaving(false);
+    try {
+      await updateUser({
+        name: displayName.trim() || (user?.email?.split("@")[0] ?? "Member"),
+        avatarUrl
+      });
+      setMessage("Profile updated.");
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : "Unable to update profile.");
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   if (!isAuthenticated) {

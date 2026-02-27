@@ -20,44 +20,10 @@ export type WorkspaceRecord = {
   ownerName: string;
 };
 
-const WORKSPACES_STORAGE_KEY = "magisterludi.dashboard.workspaces";
+const WORKSPACES_STORAGE_KEY = "magisterludi.dashboard.workspaces.v2";
+const LEGACY_WORKSPACES_STORAGE_KEY = "magisterludi.dashboard.workspaces";
 
-const DEFAULT_WORKSPACES: WorkspaceRecord[] = [
-  {
-    id: "1",
-    name: "Product Development",
-    description: "Main product development workspace",
-    roomCount: 4,
-    lastAccessed: "2 hours ago",
-    collaborators: 5,
-    collaboratorsList: [
-      { id: "1", name: "John Doe", email: "john.doe@example.com", role: "owner" },
-      { id: "2", name: "Jane Smith", email: "jane.smith@example.com", role: "editor" },
-      { id: "3", name: "Mike Johnson", email: "mike.johnson@example.com", role: "viewer" },
-      { id: "4", name: "Emily Davis", email: "emily.davis@example.com", role: "admin" },
-      { id: "5", name: "Chris Lee", email: "chris.lee@example.com", role: "editor" }
-    ],
-    color: "var(--primary)",
-    owner: "1",
-    ownerName: "John Doe"
-  },
-  {
-    id: "2",
-    name: "Industrial Series",
-    description: "Heavy-duty industrial equipment",
-    roomCount: 2,
-    lastAccessed: "1 day ago",
-    collaborators: 3,
-    collaboratorsList: [
-      { id: "1", name: "John Doe", email: "john.doe@example.com", role: "owner" },
-      { id: "6", name: "Alex Carter", email: "alex.carter@example.com", role: "admin" },
-      { id: "7", name: "Taylor Nguyen", email: "taylor.nguyen@example.com", role: "editor" }
-    ],
-    color: "#2563eb",
-    owner: "1",
-    ownerName: "John Doe"
-  }
-];
+const DEFAULT_WORKSPACES: WorkspaceRecord[] = [];
 
 function isBrowser() {
   return typeof window !== "undefined";
@@ -84,31 +50,18 @@ function sanitizeCollaborator(raw: unknown): CollaboratorRecord | null {
 }
 
 function fallbackCollaborators(entry: Partial<WorkspaceRecord>): CollaboratorRecord[] {
-  const ownerId = String(entry.owner ?? "owner");
-  const ownerName = String(entry.ownerName ?? "Owner");
-  const ownerEmail = `${ownerName.toLowerCase().replace(/\s+/g, ".") || "owner"}@example.com`;
-  const total = Math.max(Number(entry.collaborators ?? 1), 1);
+  const ownerId = String(entry.owner ?? "");
+  const ownerName = String(entry.ownerName ?? "").trim();
+  if (!ownerId) return [];
 
-  const list: CollaboratorRecord[] = [
+  return [
     {
       id: ownerId,
-      name: ownerName,
-      email: ownerEmail,
+      name: ownerName || "Owner",
+      email: "",
       role: "owner"
     }
   ];
-
-  for (let index = 1; index < total; index += 1) {
-    const n = index + 1;
-    list.push({
-      id: `${String(entry.id ?? "workspace")}-member-${n}`,
-      name: `Member ${n}`,
-      email: `member${n}@example.com`,
-      role: "viewer"
-    });
-  }
-
-  return list;
 }
 
 function sanitizeWorkspace(raw: unknown): WorkspaceRecord | null {
@@ -139,17 +92,36 @@ function sanitizeWorkspace(raw: unknown): WorkspaceRecord | null {
   };
 }
 
-function removeLegacySharedPlaceholders(workspaces: WorkspaceRecord[]) {
-  return workspaces.filter((workspace) => {
-    const isLegacyMarketing =
-      workspace.id === "3" &&
-      workspace.name === "Marketing Campaign" &&
-      workspace.ownerName === "Jane Smith";
-    const isLegacyDesignSystem =
-      workspace.id === "4" && workspace.name === "Design System" && workspace.ownerName === "Mike Johnson";
+function isPlaceholderName(name: string) {
+  const normalized = name.trim().toLowerCase();
+  return (
+    normalized === "john doe" ||
+    normalized === "jane smith" ||
+    normalized === "mike johnson" ||
+    normalized === "emily davis" ||
+    normalized === "chris lee" ||
+    normalized.startsWith("member ")
+  );
+}
 
-    return !isLegacyMarketing && !isLegacyDesignSystem;
-  });
+function isPlaceholderWorkspace(workspace: WorkspaceRecord) {
+  const workspaceName = workspace.name.trim().toLowerCase();
+  const hasDemoWorkspaceName =
+    workspaceName === "product development" ||
+    workspaceName === "industrial series" ||
+    workspaceName === "marketing campaign" ||
+    workspaceName === "design system";
+  const hasDemoOwnerName = isPlaceholderName(workspace.ownerName);
+  const hasDemoCollaborators = workspace.collaboratorsList.some(
+    (collaborator) =>
+      collaborator.email.toLowerCase().endsWith("@example.com") || isPlaceholderName(collaborator.name)
+  );
+
+  return hasDemoWorkspaceName || hasDemoOwnerName || hasDemoCollaborators;
+}
+
+function removePlaceholderSeedData(workspaces: WorkspaceRecord[]) {
+  return workspaces.filter((workspace) => !isPlaceholderWorkspace(workspace));
 }
 
 export function getDefaultWorkspaces() {
@@ -162,7 +134,9 @@ export function loadWorkspaces() {
   }
 
   try {
-    const raw = window.localStorage.getItem(WORKSPACES_STORAGE_KEY);
+    const raw =
+      window.localStorage.getItem(WORKSPACES_STORAGE_KEY) ??
+      window.localStorage.getItem(LEGACY_WORKSPACES_STORAGE_KEY);
     if (!raw) return getDefaultWorkspaces();
 
     const parsed = JSON.parse(raw);
@@ -172,8 +146,12 @@ export function loadWorkspaces() {
       .map((entry) => sanitizeWorkspace(entry))
       .filter((entry): entry is WorkspaceRecord => entry !== null);
 
-    const migrated = removeLegacySharedPlaceholders(next);
-    return migrated.length > 0 ? migrated : getDefaultWorkspaces();
+    const migrated = removePlaceholderSeedData(next);
+    if (raw && window.localStorage.getItem(LEGACY_WORKSPACES_STORAGE_KEY)) {
+      window.localStorage.setItem(WORKSPACES_STORAGE_KEY, JSON.stringify(migrated));
+      window.localStorage.removeItem(LEGACY_WORKSPACES_STORAGE_KEY);
+    }
+    return migrated;
   } catch {
     return getDefaultWorkspaces();
   }
