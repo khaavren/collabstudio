@@ -52,8 +52,6 @@ export type AdminSettingsResponse = {
   };
 };
 
-const MAX_BEARER_TOKEN_LENGTH = 7000;
-
 function normalizeAccessToken(value: unknown) {
   if (typeof value !== "string") return null;
   const token = value.trim();
@@ -61,7 +59,6 @@ function normalizeAccessToken(value: unknown) {
 }
 
 function isSafeBearerToken(token: string) {
-  if (token.length > MAX_BEARER_TOKEN_LENGTH) return false;
   if (token.includes("\n") || token.includes("\r")) return false;
   return token.split(".").length === 3;
 }
