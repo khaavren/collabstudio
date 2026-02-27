@@ -75,6 +75,7 @@ export function Dashboard() {
   const menuRef = useRef<HTMLDivElement>(null);
   const [workspaces, setWorkspaces] = useState<WorkspaceRecord[]>(() => loadWorkspaces());
   const [editingWorkspace, setEditingWorkspace] = useState<WorkspaceRecord | null>(null);
+  const [pendingWorkspaceId, setPendingWorkspaceId] = useState<string | null>(null);
   const [invitingCollaboratorsWorkspace, setInvitingCollaboratorsWorkspace] =
     useState<WorkspaceRecord | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -173,6 +174,10 @@ export function Dashboard() {
           : workspace
       )
     );
+
+    if (pendingWorkspaceId === editingWorkspace.id) {
+      setPendingWorkspaceId(null);
+    }
   }
 
   function handleDeleteWorkspace() {
@@ -184,6 +189,17 @@ export function Dashboard() {
     if (!confirmed) return;
 
     setWorkspaces((current) => current.filter((workspace) => workspace.id !== editingWorkspace.id));
+    if (pendingWorkspaceId === editingWorkspace.id) {
+      setPendingWorkspaceId(null);
+    }
+    setEditingWorkspace(null);
+  }
+
+  function handleCloseEditWorkspace() {
+    if (editingWorkspace && pendingWorkspaceId === editingWorkspace.id) {
+      setWorkspaces((current) => current.filter((workspace) => workspace.id !== editingWorkspace.id));
+      setPendingWorkspaceId(null);
+    }
     setEditingWorkspace(null);
   }
 
@@ -211,6 +227,7 @@ export function Dashboard() {
     };
 
     setWorkspaces((current) => [newWorkspace, ...current]);
+    setPendingWorkspaceId(nowId);
     setEditingWorkspace(newWorkspace);
   }
 
@@ -577,7 +594,7 @@ export function Dashboard() {
 
       <EditWorkspaceModal
         isOpen={editingWorkspace !== null}
-        onClose={() => setEditingWorkspace(null)}
+        onClose={handleCloseEditWorkspace}
         onDelete={handleDeleteWorkspace}
         onSave={handleSaveWorkspace}
         workspaceDescription={editingWorkspace?.description ?? ""}
