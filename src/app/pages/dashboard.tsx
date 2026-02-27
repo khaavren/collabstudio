@@ -187,6 +187,33 @@ export function Dashboard() {
     setEditingWorkspace(null);
   }
 
+  function handleCreateWorkspace() {
+    const nowId = Date.now().toString();
+    const existingCount = ownedWorkspaces.length;
+    const newWorkspace: WorkspaceRecord = {
+      id: nowId,
+      name: `New Workspace ${existingCount + 1}`,
+      description: "New workspace",
+      roomCount: 0,
+      lastAccessed: "Just now",
+      collaborators: 1,
+      collaboratorsList: [
+        {
+          id: currentUserId,
+          name: currentUserName,
+          email: user?.email ?? "owner@example.com",
+          role: "owner"
+        }
+      ],
+      color: "var(--primary)",
+      owner: currentUserId,
+      ownerName: currentUserName
+    };
+
+    setWorkspaces((current) => [newWorkspace, ...current]);
+    setEditingWorkspace(newWorkspace);
+  }
+
   function handleInviteCollaborator(email: string, role: string) {
     if (!activeInvitingWorkspace) return;
 
@@ -353,6 +380,7 @@ export function Dashboard() {
             </div>
             <button
               className="inline-flex items-center gap-2 rounded-xl bg-[var(--primary)] px-5 py-3 text-xl font-medium text-white transition hover:opacity-90"
+              onClick={handleCreateWorkspace}
               type="button"
             >
               <Plus className="h-5 w-5" />
@@ -422,6 +450,7 @@ export function Dashboard() {
 
             <button
               className="flex min-h-[220px] flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border)] bg-[var(--card)] p-5 text-center transition hover:border-[var(--primary)]"
+              onClick={handleCreateWorkspace}
               type="button"
             >
               <span className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--accent)] text-[var(--primary)]">
