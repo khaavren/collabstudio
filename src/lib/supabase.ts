@@ -710,3 +710,89 @@ export async function deleteAssetCascade(assetId: string) {
     }
   }
 }
+
+export async function deleteAssetVersionTurn(versionId: string) {
+  const { data: targetVersion, error: targetError } = await supabase
+    .from("asset_versions")
+    .select("id, asset_id")
+    .eq("id", versionId)
+    .maybeSingle();
+
+  if (targetError) {
+    throw new Error(toUserErrorMessage(targetError));
+  }
+
+  if (!targetVersion) {
+    return {
+      assetDeleted: false,
+      assetId: null as string | null,
+      nextVersionId: null as string | null
+    };
+  }
+
+  const assetId = targetVersion.asset_id;
+  const { error: deleteVersionError } = await supabase
+    .from("asset_versions")
+    .delete()
+    .eq("id", versionId);
+
+  if (deleteVersionError) {
+    throw new Error(toUserErrorMessage(deleteVersionError));
+  }
+
+  const { data: remainingVersions, error: remainingError } = await supabase
+    .from("asset_versions")
+    .select("id, version, image_url, created_at")
+    .eq("asset_id", assetId)
+    .order("created_at", { ascending: false });
+
+  if (remainingError) {
+    throw new Error(toUserErrorMessage(remainingError));
+  }
+
+  const remaining = remainingVersions ?? [];
+  if (remaining.length === 0) {
+    await deleteAssetCascade(assetId);
+    return {
+      assetDeleted: true,
+      assetId,
+      nextVersionId: null as string | null
+    };
+  }
+
+  const nextVersion = remaining[0];
+
+  const { data: assetRow, error: assetLookupError } = await supabase
+    .from("assets")
+    .select("title, image_url")
+    .eq("id", assetId)
+    .maybeSingle();
+
+  if (assetLookupError) {
+    throw new Error(toUserErrorMessage(assetLookupError));
+  }
+
+  const fallbackCover =
+    nextVersion.image_url ||
+    assetRow?.image_url ||
+    placeholderUrl(assetRow?.title ?? assetId, "1024x1024");
+
+  const { error: updateAssetError } = await supabase
+    .from("assets")
+    .update({
+      current_version: nextVersion.version,
+      image_url: fallbackCover,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", assetId);
+
+  if (updateAssetError) {
+    throw new Error(toUserErrorMessage(updateAssetError));
+  }
+
+  return {
+    assetDeleted: false,
+    assetId,
+    nextVersionId: nextVersion.id
+  };
+}

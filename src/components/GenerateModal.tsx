@@ -110,36 +110,6 @@ export function GenerateModal({
 
           {imageModeEnabled ? (
             <>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="block text-sm text-[var(--foreground)]">
-                  Style
-                  <select
-                    className="mt-1 w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm outline-none"
-                    onChange={(event) => setForm((current) => ({ ...current, style: event.target.value }))}
-                    value={form.style}
-                  >
-                    <option>Product Photography</option>
-                    <option>Technical Drawing</option>
-                    <option>3D Render</option>
-                    <option>Sketch</option>
-                  </select>
-                </label>
-
-                <label className="block text-sm text-[var(--foreground)]">
-                  Size
-                  <select
-                    className="mt-1 w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm outline-none"
-                    onChange={(event) => setForm((current) => ({ ...current, size: event.target.value }))}
-                    value={form.size}
-                  >
-                    <option>1024x1024</option>
-                    <option>1024x768</option>
-                    <option>768x1024</option>
-                    <option>2048x2048</option>
-                  </select>
-                </label>
-              </div>
-
               <label className="block text-sm text-[var(--foreground)]">
                 Notes (optional)
               <input

@@ -12,6 +12,7 @@ import {
   type ActorProfile,
   createRoom,
   deleteRoom,
+  deleteAssetVersionTurn,
   deleteAssetCascade,
   ensureAnonSession,
   fetchAssetDetails,
@@ -551,6 +552,42 @@ export function RoomPage() {
     }
   }
 
+  async function handleDeleteVersion(version: AssetVersion) {
+    const confirmed = window.confirm(`Delete turn ${version.version}? This cannot be undone.`);
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      const result = await deleteAssetVersionTurn(version.id);
+      await loadAssetsData();
+
+      if (!result.assetId) {
+        setError(null);
+        return;
+      }
+
+      if (result.assetDeleted) {
+        if (selectedAssetId === result.assetId) {
+          setSelectedAssetId(null);
+          setActiveVersionId(null);
+          setVersions([]);
+          setAnnotations([]);
+          setComments([]);
+        }
+      } else if (selectedAssetId === result.assetId) {
+        await loadInspectorData(result.assetId);
+        if (result.nextVersionId) {
+          setActiveVersionId(result.nextVersionId);
+        }
+      }
+
+      setError(null);
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : "Unable to delete turn.");
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center text-sm text-[var(--muted-foreground)]">
@@ -612,6 +649,7 @@ export function RoomPage() {
                 // Error banner is already set by handleGenerate.
               });
             }}
+            onDeleteVersion={handleDeleteVersion}
             onRegenerate={(version) => {
               void handleGenerate({
                 title: selectedAsset.title,

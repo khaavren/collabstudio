@@ -6,6 +6,7 @@ import {
   RotateCw,
   Send,
   Sparkles,
+  Trash2,
   X
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
@@ -31,6 +32,7 @@ type AssetDetailViewProps = {
   }) => Promise<boolean>;
   onAssetDelete: (assetId: string) => Promise<boolean>;
   onCreateVariant: (version: AssetVersion) => void;
+  onDeleteVersion: (version: AssetVersion) => void;
   onRegenerate: (version: AssetVersion) => void;
   onSelectVersion: (versionId: string) => void;
   onSendPrompt: (prompt: string, referenceFile: File | null) => Promise<void>;
@@ -115,12 +117,14 @@ function GenerationMessage({
   isActive,
   message,
   onCreateVariant,
+  onDeleteVersion,
   onImageClick,
   onRegenerate
 }: {
   isActive: boolean;
   message: Extract<ConversationMessage, { type: "generation" }>;
   onCreateVariant: (version: AssetVersion) => void;
+  onDeleteVersion: (version: AssetVersion) => void;
   onImageClick: (imageUrl: string) => void;
   onRegenerate: (version: AssetVersion) => void;
 }) {
@@ -226,6 +230,14 @@ function GenerationMessage({
               >
                 <ImageIcon className="h-3.5 w-3.5" />
                 Create Variant
+              </button>
+              <button
+                className="inline-flex items-center gap-1.5 text-xs text-[var(--muted-foreground)] transition hover:text-[#b54a3f]"
+                onClick={() => onDeleteVersion(message.sourceVersion)}
+                type="button"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Delete Turn
               </button>
             </div>
           </>
@@ -425,6 +437,7 @@ export function AssetDetailView({
   onAssetDelete,
   onAssetUpdate,
   onCreateVariant,
+  onDeleteVersion,
   onRegenerate,
   onSelectVersion,
   onSendPrompt,
@@ -611,6 +624,7 @@ export function AssetDetailView({
                       isActive={message.versionId === (activeVersion?.id ?? latestVersionId)}
                       message={message}
                       onCreateVariant={onCreateVariant}
+                      onDeleteVersion={onDeleteVersion}
                       onImageClick={setSelectedImage}
                       onRegenerate={onRegenerate}
                     />
