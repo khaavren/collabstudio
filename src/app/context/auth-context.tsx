@@ -176,9 +176,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      throw new Error(error.message || "Unable to sign out.");
+    const localResult = await supabase.auth.signOut({ scope: "local" });
+    // Ensure the UI can always recover to a signed-out state.
+    setUser(null);
+
+    if (localResult.error) {
+      const fallbackResult = await supabase.auth.signOut();
+      if (fallbackResult.error) {
+        return;
+      }
     }
   }
 

@@ -73,8 +73,7 @@ async function getAccessToken() {
   }
 
   const token = normalizeAccessToken(data.session?.access_token ?? null);
-  if (!token) return null;
-  if (isSafeBearerToken(token)) return token;
+  if (token && isSafeBearerToken(token)) return token;
 
   // Recover from stale/corrupted local auth state without making a broken API request.
   const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
