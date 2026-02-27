@@ -63,7 +63,7 @@ type ApiTestResponse = {
 };
 
 type AdminTab = "organization" | "account" | "model" | "usage" | "security";
-const WORKSPACE_PATH = "/room/hard-hat-system";
+const WORKSPACE_PATH = "/";
 
 function recommendedModelsForProvider(provider: string) {
   const normalizedProvider = normalizeProviderValue(provider);

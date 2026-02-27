@@ -63,10 +63,10 @@ export function ProfilePage() {
         <div className="mx-auto max-w-3xl space-y-4">
           <Link
             className="inline-flex items-center gap-2 text-sm text-[var(--muted-foreground)] transition hover:text-[var(--foreground)]"
-            to="/room/hard-hat-system"
+            to="/"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to workspace
+            Back to workspaces
           </Link>
 
           <section className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-6">

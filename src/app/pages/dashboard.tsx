@@ -18,9 +18,13 @@ import { useAuth } from "@/app/context/auth-context";
 import { InviteCollaboratorsModal } from "../components/invite-collaborators-modal";
 import { EditWorkspaceModal } from "@/components/EditWorkspaceModal";
 import {
-  loadWorkspaces,
-  saveWorkspaces,
-  type CollaboratorRecord,
+  createWorkspaceForUser,
+  deleteWorkspaceById,
+  fetchWorkspacesForUser,
+  inviteWorkspaceCollaborator,
+  removeWorkspaceCollaborator,
+  updateWorkspaceById,
+  updateWorkspaceCollaboratorRole,
   type WorkspaceRecord
 } from "@/lib/workspaces";
 
@@ -45,12 +49,14 @@ function activityIcon(type: Activity["type"]) {
 export function Dashboard() {
   const { logout, user } = useAuth();
   const menuRef = useRef<HTMLDivElement>(null);
-  const [workspaces, setWorkspaces] = useState<WorkspaceRecord[]>(() => loadWorkspaces());
+  const [workspaces, setWorkspaces] = useState<WorkspaceRecord[]>([]);
   const [editingWorkspace, setEditingWorkspace] = useState<WorkspaceRecord | null>(null);
   const [pendingWorkspaceId, setPendingWorkspaceId] = useState<string | null>(null);
   const [invitingCollaboratorsWorkspace, setInvitingCollaboratorsWorkspace] =
     useState<WorkspaceRecord | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isLoadingWorkspaces, setIsLoadingWorkspaces] = useState(true);
 
   const currentUserId = user?.id ?? "";
   const currentUserName = user?.name?.trim() || (user?.email ? user.email.split("@")[0] : "Member");
@@ -117,8 +123,41 @@ export function Dashboard() {
   ];
 
   useEffect(() => {
-    saveWorkspaces(workspaces);
-  }, [workspaces]);
+    let active = true;
+
+    async function load() {
+      if (!user?.id) {
+        if (!active) return;
+        setWorkspaces([]);
+        setIsLoadingWorkspaces(false);
+        setError(null);
+        return;
+      }
+
+      setIsLoadingWorkspaces(true);
+      try {
+        const data = await fetchWorkspacesForUser({
+          userId: user.id,
+          email: user.email ?? null
+        });
+        if (!active) return;
+        setWorkspaces(data);
+        setError(null);
+      } catch (caught) {
+        if (!active) return;
+        setError(caught instanceof Error ? caught.message : "Unable to load workspaces.");
+      } finally {
+        if (!active) return;
+        setIsLoadingWorkspaces(false);
+      }
+    }
+
+    void load();
+
+    return () => {
+      active = false;
+    };
+  }, [user?.email, user?.id]);
 
   useEffect(() => {
     function handleOutsideClick(event: MouseEvent) {
@@ -145,41 +184,70 @@ export function Dashboard() {
   function handleSaveWorkspace(next: { name: string; description: string }) {
     if (!editingWorkspace) return;
 
-    setWorkspaces((current) =>
-      current.map((workspace) =>
-        workspace.id === editingWorkspace.id
-          ? {
-              ...workspace,
-              name: next.name,
-              description: next.description
-            }
-          : workspace
-      )
-    );
+    void (async () => {
+      try {
+        if (pendingWorkspaceId === editingWorkspace.id) {
+          if (!user?.id || !user?.email) {
+            throw new Error("Sign in with an email account to create a workspace.");
+          }
+          await createWorkspaceForUser({
+            ownerId: user.id,
+            ownerName: currentUserName,
+            ownerEmail: user.email,
+            name: next.name,
+            description: next.description,
+            color: "var(--primary)"
+          });
+          setPendingWorkspaceId(null);
+        } else {
+          await updateWorkspaceById(editingWorkspace.id, next);
+        }
 
-    if (pendingWorkspaceId === editingWorkspace.id) {
-      setPendingWorkspaceId(null);
-    }
+        const data = await fetchWorkspacesForUser({
+          userId: user?.id ?? "",
+          email: user?.email ?? null
+        });
+        setWorkspaces(data);
+        setError(null);
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : "Unable to save workspace.");
+      }
+    })();
   }
 
   function handleDeleteWorkspace() {
     if (!editingWorkspace) return;
+
+    if (pendingWorkspaceId === editingWorkspace.id) {
+      setPendingWorkspaceId(null);
+      setEditingWorkspace(null);
+      return;
+    }
 
     const confirmed = window.confirm(
       `Delete workspace "${editingWorkspace.name}"? This action cannot be undone.`
     );
     if (!confirmed) return;
 
-    setWorkspaces((current) => current.filter((workspace) => workspace.id !== editingWorkspace.id));
-    if (pendingWorkspaceId === editingWorkspace.id) {
-      setPendingWorkspaceId(null);
-    }
-    setEditingWorkspace(null);
+    void (async () => {
+      try {
+        await deleteWorkspaceById(editingWorkspace.id);
+        const data = await fetchWorkspacesForUser({
+          userId: user?.id ?? "",
+          email: user?.email ?? null
+        });
+        setWorkspaces(data);
+        setError(null);
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : "Unable to delete workspace.");
+      } finally {
+        setEditingWorkspace(null);
+      }
+    })();
   }
 
   function handleCloseEditWorkspace() {
     if (editingWorkspace && pendingWorkspaceId === editingWorkspace.id) {
-      setWorkspaces((current) => current.filter((workspace) => workspace.id !== editingWorkspace.id));
       setPendingWorkspaceId(null);
     }
     setEditingWorkspace(null);
@@ -188,12 +256,12 @@ export function Dashboard() {
   function handleCreateWorkspace() {
     if (!currentUserId) return;
     const nowId = Date.now().toString();
-    const existingCount = ownedWorkspaces.length;
     const newWorkspace: WorkspaceRecord = {
       id: nowId,
-      name: `New Workspace ${existingCount + 1}`,
-      description: "New workspace",
+      name: "",
+      description: "",
       roomCount: 0,
+      defaultRoomSlug: null,
       lastAccessed: "Just now",
       collaborators: 1,
       collaboratorsList: [
@@ -209,7 +277,6 @@ export function Dashboard() {
       ownerName: currentUserName
     };
 
-    setWorkspaces((current) => [newWorkspace, ...current]);
     setPendingWorkspaceId(nowId);
     setEditingWorkspace(newWorkspace);
   }
@@ -217,71 +284,57 @@ export function Dashboard() {
   function handleInviteCollaborator(email: string, role: string) {
     if (!activeInvitingWorkspace) return;
 
-    const normalizedRole =
-      role === "admin" || role === "editor" || role === "viewer" ? role : "viewer";
-    const generatedName = email
-      .split("@")[0]
-      .replace(/[._-]/g, " ")
-      .replace(/\b\w/g, (letter) => letter.toUpperCase());
-    const newCollaborator: CollaboratorRecord = {
-      id: Date.now().toString(),
-      name: generatedName,
-      email,
-      role: normalizedRole
-    };
-
-    setWorkspaces((previous) =>
-      previous.map((workspace) =>
-        workspace.id === activeInvitingWorkspace.id
-          ? {
-              ...workspace,
-              collaboratorsList: [...workspace.collaboratorsList, newCollaborator],
-              collaborators: workspace.collaborators + 1
-            }
-          : workspace
-      )
-    );
+    const normalizedRole = role === "admin" || role === "editor" || role === "viewer" ? role : "viewer";
+    void (async () => {
+      try {
+        await inviteWorkspaceCollaborator(activeInvitingWorkspace.id, email, normalizedRole);
+        const data = await fetchWorkspacesForUser({
+          userId: user?.id ?? "",
+          email: user?.email ?? null
+        });
+        setWorkspaces(data);
+        setError(null);
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : "Unable to invite collaborator.");
+      }
+    })();
   }
 
   function handleRemoveCollaborator(collaboratorId: string) {
     if (!activeInvitingWorkspace) return;
 
-    setWorkspaces((previous) =>
-      previous.map((workspace) => {
-        if (workspace.id !== activeInvitingWorkspace.id) return workspace;
-
-        const target = workspace.collaboratorsList.find((collaborator) => collaborator.id === collaboratorId);
-        if (!target || target.role === "owner") return workspace;
-
-        return {
-          ...workspace,
-          collaboratorsList: workspace.collaboratorsList.filter(
-            (collaborator) => collaborator.id !== collaboratorId
-          ),
-          collaborators: Math.max(workspace.collaborators - 1, 0)
-        };
-      })
-    );
+    void (async () => {
+      try {
+        await removeWorkspaceCollaborator(collaboratorId);
+        const data = await fetchWorkspacesForUser({
+          userId: user?.id ?? "",
+          email: user?.email ?? null
+        });
+        setWorkspaces(data);
+        setError(null);
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : "Unable to remove collaborator.");
+      }
+    })();
   }
 
   function handleRoleChange(collaboratorId: string, newRole: string) {
     if (!activeInvitingWorkspace) return;
     if (newRole !== "admin" && newRole !== "editor" && newRole !== "viewer") return;
 
-    setWorkspaces((previous) =>
-      previous.map((workspace) =>
-        workspace.id === activeInvitingWorkspace.id
-          ? {
-              ...workspace,
-              collaboratorsList: workspace.collaboratorsList.map((collaborator) =>
-                collaborator.id === collaboratorId && collaborator.role !== "owner"
-                  ? { ...collaborator, role: newRole }
-                  : collaborator
-              )
-            }
-          : workspace
-      )
-    );
+    void (async () => {
+      try {
+        await updateWorkspaceCollaboratorRole(collaboratorId, newRole);
+        const data = await fetchWorkspacesForUser({
+          userId: user?.id ?? "",
+          email: user?.email ?? null
+        });
+        setWorkspaces(data);
+        setError(null);
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : "Unable to update role.");
+      }
+    })();
   }
 
   return (
@@ -350,6 +403,11 @@ export function Dashboard() {
       </header>
 
       <main className="site-shell space-y-10 px-6 py-10">
+        {error ? (
+          <div className="rounded-lg border border-[#e8cfc6] bg-[#fff4f0] px-4 py-2 text-sm text-[#9d4d3d]">
+            {error}
+          </div>
+        ) : null}
         <section>
           <h1 className="text-5xl font-semibold tracking-tight">Welcome back, {firstName}</h1>
           <p className="mt-2 text-2xl text-[var(--muted-foreground)]">
@@ -395,7 +453,7 @@ export function Dashboard() {
               <Link
                 className="group relative rounded-xl border border-[var(--border)] bg-[var(--card)] p-5 transition hover:border-[var(--primary)] hover:shadow-sm"
                 key={workspace.id}
-                to={`/workspace/${workspace.id}/room/hard-hat-system`}
+                to={`/workspace/${workspace.id}/room/${workspace.defaultRoomSlug ?? "new-room"}`}
               >
                 <button
                   className="absolute right-16 top-3 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--card)] text-[var(--muted-foreground)] opacity-0 shadow-sm transition hover:bg-[var(--accent)] hover:text-[var(--foreground)] group-hover:opacity-100"
@@ -450,17 +508,19 @@ export function Dashboard() {
               </Link>
             ))}
 
-            <button
-              className="flex min-h-[220px] flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border)] bg-[var(--card)] p-5 text-center transition hover:border-[var(--primary)]"
-              onClick={handleCreateWorkspace}
-              type="button"
-            >
-              <span className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--accent)] text-[var(--primary)]">
-                <Plus className="h-5 w-5" />
-              </span>
-              <p className="text-xl font-semibold tracking-tight">Create New Workspace</p>
-              <p className="mt-1 text-sm text-[var(--muted-foreground)]">Start a new project</p>
-            </button>
+            {!isLoadingWorkspaces ? (
+              <button
+                className="flex min-h-[220px] flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border)] bg-[var(--card)] p-5 text-center transition hover:border-[var(--primary)]"
+                onClick={handleCreateWorkspace}
+                type="button"
+              >
+                <span className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--accent)] text-[var(--primary)]">
+                  <Plus className="h-5 w-5" />
+                </span>
+                <p className="text-xl font-semibold tracking-tight">Create New Workspace</p>
+                <p className="mt-1 text-sm text-[var(--muted-foreground)]">Start a new project</p>
+              </button>
+            ) : null}
           </div>
         </section>
 
@@ -478,7 +538,7 @@ export function Dashboard() {
                 <Link
                   className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5 transition hover:border-[var(--primary)] hover:shadow-sm"
                   key={workspace.id}
-                  to={`/workspace/${workspace.id}/room/hard-hat-system`}
+                  to={`/workspace/${workspace.id}/room/${workspace.defaultRoomSlug ?? "new-room"}`}
                 >
                   <div
                     className="mb-4 inline-flex h-10 w-10 items-center justify-center rounded-lg text-white"

@@ -120,13 +120,17 @@ export async function ensureAnonSession() {
   }
 }
 
-export async function fetchRooms() {
-  const { data, error } = await supabase.from("rooms").select("*").order("name");
+export async function fetchRooms(workspaceId?: string | null) {
+  let query = supabase.from("rooms").select("*").order("name");
+  if (workspaceId) {
+    query = query.eq("workspace_id", workspaceId);
+  }
+  const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as Room[];
 }
 
-export async function createRoom(name: string, slug: string) {
+export async function createRoom(name: string, slug: string, workspaceId?: string | null) {
   const baseSlug = slug;
 
   for (let attempt = 0; attempt < 8; attempt += 1) {
@@ -134,7 +138,7 @@ export async function createRoom(name: string, slug: string) {
 
     const { data, error } = await supabase
       .from("rooms")
-      .insert({ name, slug: candidateSlug })
+      .insert({ name, slug: candidateSlug, workspace_id: workspaceId ?? null })
       .select("*")
       .single();
 

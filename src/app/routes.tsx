@@ -9,7 +9,7 @@ import { RoomPage } from "@/pages/RoomPage";
 
 function roomLoader({ params }: LoaderFunctionArgs) {
   return {
-    roomSlug: params.roomId ?? "hard-hat-system"
+    roomSlug: params.roomId ?? ""
   };
 }
 

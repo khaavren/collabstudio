@@ -1,5 +1,6 @@
 export type Room = {
   id: string;
+  workspace_id: string | null;
   name: string;
   slug: string;
   created_at: string;

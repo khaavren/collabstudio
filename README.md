@@ -10,8 +10,9 @@ Band Joes Studio is a Notion-inspired collaborative product development app with
 - Vercel (static frontend + serverless `/api/*`)
 
 ## Routes
-- `/` -> redirects to `/room/hard-hat-system`
+- `/` -> marketing page (logged out) or dashboard (logged in)
 - `/room/:roomId` -> main collaborative board
+- `/workspace/:workspaceId/room/:roomId` -> workspace-scoped board
 - `/admin` -> Account & Infrastructure Settings (protected by `ADMIN_EMAILS`)
 
 ## Environment Variables
@@ -34,7 +35,7 @@ Notes:
 ## Supabase Setup
 1. Open Supabase Dashboard -> SQL Editor.
 2. Run `supabase/schema.sql`.
-3. Run `supabase/seed.sql`.
+3. Do not run `supabase/seed.sql` in production (it inserts demo content).
 4. In Auth -> Providers:
    - Enable `Anonymous` (for quick board usage)
    - Enable `Email` (for admin magic link sign-in)
@@ -96,6 +97,9 @@ npm run build
 
 ## Placeholder Image Generation
 The board calls `POST /api/generate-image`.
-- If org model settings are configured, the route marks provider/model as configured.
-- For deployability, it still returns deterministic Picsum placeholders.
-- If not configured, it falls back to placeholder mode automatically.
+- If org model settings are configured, generation uses the configured provider/model.
+- If provider generation fails or is not configured, the route falls back to deterministic Picsum placeholders.
+
+## Production Workspace Data
+- Workspaces and collaborators are persisted in Supabase tables (`workspaces`, `workspace_collaborators`).
+- Dashboard no longer ships with seeded placeholder users/workspaces.

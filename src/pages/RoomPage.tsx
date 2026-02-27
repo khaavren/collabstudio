@@ -25,7 +25,7 @@ import {
   updateRoomName,
   updateAssetMetadata
 } from "@/lib/supabase";
-import { getWorkspaceNameById } from "@/lib/workspaces";
+import { fetchWorkspaceNameById } from "@/lib/workspaces";
 import { slugify } from "@/lib/utils";
 import type {
   Annotation,
@@ -79,10 +79,7 @@ export function RoomPage() {
     () => rooms.find((room) => room.slug === activeRoomSlug) ?? null,
     [activeRoomSlug, rooms]
   );
-  const workspaceName = useMemo(
-    () => getWorkspaceNameById(activeWorkspaceId) ?? "Workspace",
-    [activeWorkspaceId]
-  );
+  const [workspaceName, setWorkspaceName] = useState("Workspace");
 
   const selectedAsset = useMemo(
     () => assets.find((asset) => asset.id === selectedAssetId) ?? null,
@@ -128,7 +125,7 @@ export function RoomPage() {
       await ensureAnonSession();
       const actor = await getCurrentActorProfile();
       setCurrentActor(actor);
-      const data = await fetchRooms();
+      const data = await fetchRooms(activeWorkspaceId);
       setRooms(data);
 
       if (data.length > 0 && !data.some((room) => room.slug === activeRoomSlug)) {
@@ -145,6 +142,27 @@ export function RoomPage() {
       setIsLoading(false);
     }
   }, [activeRoomSlug, activeWorkspaceId, navigate]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadWorkspaceName() {
+      if (!activeWorkspaceId) {
+        if (!active) return;
+        setWorkspaceName("Workspace");
+        return;
+      }
+
+      const name = await fetchWorkspaceNameById(activeWorkspaceId);
+      if (!active) return;
+      setWorkspaceName(name ?? "Workspace");
+    }
+
+    void loadWorkspaceName();
+    return () => {
+      active = false;
+    };
+  }, [activeWorkspaceId]);
 
   const loadAssetsData = useCallback(async () => {
     if (!activeRoom) {
@@ -299,7 +317,7 @@ export function RoomPage() {
     if (!slug) return;
 
     try {
-      const room = await createRoom(name, slug);
+      const room = await createRoom(name, slug, activeWorkspaceId);
       setRooms((current) => [...current, room]);
       const nextPath = activeWorkspaceId
         ? `/workspace/${activeWorkspaceId}/room/${room.slug}`

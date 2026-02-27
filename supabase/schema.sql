@@ -10,13 +10,39 @@ begin
 end;
 $$;
 
+create table if not exists workspaces (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  description text not null default '',
+  color text not null default 'var(--primary)',
+  owner_id uuid not null,
+  owner_name text not null default '',
+  owner_email text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists workspace_collaborators (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null references workspaces(id) on delete cascade,
+  user_id uuid,
+  email text not null,
+  display_name text,
+  role text not null check (role in ('owner', 'admin', 'editor', 'viewer')),
+  created_at timestamptz not null default now(),
+  unique (workspace_id, email)
+);
+
 create table if not exists rooms (
   id uuid primary key default gen_random_uuid(),
+  workspace_id uuid references workspaces(id) on delete cascade,
   name text not null,
   slug text not null unique,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table rooms add column if not exists workspace_id uuid references workspaces(id) on delete cascade;
 
 create table if not exists assets (
   id uuid primary key default gen_random_uuid(),
@@ -84,6 +110,10 @@ create table if not exists comments (
 );
 
 create index if not exists assets_room_id_idx on assets(room_id);
+create index if not exists rooms_workspace_id_idx on rooms(workspace_id);
+create index if not exists workspaces_owner_id_idx on workspaces(owner_id);
+create index if not exists workspace_collaborators_workspace_id_idx on workspace_collaborators(workspace_id);
+create index if not exists workspace_collaborators_user_id_idx on workspace_collaborators(user_id);
 create index if not exists asset_tags_asset_id_idx on asset_tags(asset_id);
 create index if not exists asset_versions_asset_id_idx on asset_versions(asset_id);
 create index if not exists annotations_asset_id_idx on annotations(asset_id);
@@ -152,11 +182,145 @@ select
 from comments;
 
 alter table rooms enable row level security;
+alter table workspaces enable row level security;
+alter table workspace_collaborators enable row level security;
 alter table assets enable row level security;
 alter table asset_tags enable row level security;
 alter table asset_versions enable row level security;
 alter table annotations enable row level security;
 alter table comments enable row level security;
+
+drop policy if exists "workspaces_select_member" on workspaces;
+create policy "workspaces_select_member" on workspaces
+for select to authenticated
+using (
+  owner_id = auth.uid()
+  or exists (
+    select 1
+    from workspace_collaborators wc
+    where wc.workspace_id = workspaces.id
+      and (
+        wc.user_id = auth.uid()
+        or lower(wc.email) = lower(coalesce(auth.jwt() ->> 'email', ''))
+      )
+  )
+);
+
+drop policy if exists "workspaces_insert_owner" on workspaces;
+create policy "workspaces_insert_owner" on workspaces
+for insert to authenticated
+with check (owner_id = auth.uid());
+
+drop policy if exists "workspaces_update_owner_admin" on workspaces;
+create policy "workspaces_update_owner_admin" on workspaces
+for update to authenticated
+using (
+  owner_id = auth.uid()
+  or exists (
+    select 1
+    from workspace_collaborators wc
+    where wc.workspace_id = workspaces.id
+      and wc.user_id = auth.uid()
+      and wc.role in ('owner', 'admin')
+  )
+)
+with check (
+  owner_id = auth.uid()
+  or exists (
+    select 1
+    from workspace_collaborators wc
+    where wc.workspace_id = workspaces.id
+      and wc.user_id = auth.uid()
+      and wc.role in ('owner', 'admin')
+  )
+);
+
+drop policy if exists "workspaces_delete_owner_admin" on workspaces;
+create policy "workspaces_delete_owner_admin" on workspaces
+for delete to authenticated
+using (
+  owner_id = auth.uid()
+  or exists (
+    select 1
+    from workspace_collaborators wc
+    where wc.workspace_id = workspaces.id
+      and wc.user_id = auth.uid()
+      and wc.role in ('owner', 'admin')
+  )
+);
+
+drop policy if exists "workspace_collaborators_select_member" on workspace_collaborators;
+create policy "workspace_collaborators_select_member" on workspace_collaborators
+for select to authenticated
+using (
+  exists (
+    select 1
+    from workspace_collaborators me
+    where me.workspace_id = workspace_collaborators.workspace_id
+      and (
+        me.user_id = auth.uid()
+        or lower(me.email) = lower(coalesce(auth.jwt() ->> 'email', ''))
+      )
+  )
+);
+
+drop policy if exists "workspace_collaborators_insert_owner_admin" on workspace_collaborators;
+create policy "workspace_collaborators_insert_owner_admin" on workspace_collaborators
+for insert to authenticated
+with check (
+  (
+    role = 'owner'
+    and user_id = auth.uid()
+    and exists (
+      select 1
+      from workspaces w
+      where w.id = workspace_id
+        and w.owner_id = auth.uid()
+    )
+  )
+  or exists (
+    select 1
+    from workspace_collaborators me
+    where me.workspace_id = workspace_collaborators.workspace_id
+      and me.user_id = auth.uid()
+      and me.role in ('owner', 'admin')
+  )
+);
+
+drop policy if exists "workspace_collaborators_update_owner_admin" on workspace_collaborators;
+create policy "workspace_collaborators_update_owner_admin" on workspace_collaborators
+for update to authenticated
+using (
+  exists (
+    select 1
+    from workspace_collaborators me
+    where me.workspace_id = workspace_collaborators.workspace_id
+      and me.user_id = auth.uid()
+      and me.role in ('owner', 'admin')
+  )
+)
+with check (
+  exists (
+    select 1
+    from workspace_collaborators me
+    where me.workspace_id = workspace_collaborators.workspace_id
+      and me.user_id = auth.uid()
+      and me.role in ('owner', 'admin')
+  )
+);
+
+drop policy if exists "workspace_collaborators_delete_owner_admin" on workspace_collaborators;
+create policy "workspace_collaborators_delete_owner_admin" on workspace_collaborators
+for delete to authenticated
+using (
+  exists (
+    select 1
+    from workspace_collaborators me
+    where me.workspace_id = workspace_collaborators.workspace_id
+      and me.user_id = auth.uid()
+      and me.role in ('owner', 'admin')
+  )
+);
 
 drop policy if exists "rooms_public_read" on rooms;
 create policy "rooms_public_read" on rooms
@@ -230,6 +394,12 @@ before update on rooms
 for each row
 execute function public.set_updated_at();
 
+drop trigger if exists workspaces_set_updated_at on workspaces;
+create trigger workspaces_set_updated_at
+before update on workspaces
+for each row
+execute function public.set_updated_at();
+
 drop trigger if exists assets_set_updated_at on assets;
 create trigger assets_set_updated_at
 before update on assets
@@ -255,6 +425,20 @@ with check (bucket_id = 'asset-images');
 
 do $$
 begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'workspaces'
+  ) then
+    execute 'alter publication supabase_realtime add table public.workspaces';
+  end if;
+
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'workspace_collaborators'
+  ) then
+    execute 'alter publication supabase_realtime add table public.workspace_collaborators';
+  end if;
+
   if not exists (
     select 1 from pg_publication_tables
     where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'rooms'

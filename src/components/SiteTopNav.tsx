@@ -66,9 +66,9 @@ export function SiteTopNav() {
             <>
               <Link
                 className="text-[var(--muted-foreground)] transition hover:text-[var(--foreground)]"
-                to="/room/hard-hat-system"
+                to="/"
               >
-                Workspace
+                Workspaces
               </Link>
 
               <div className="relative" ref={menuRef}>
