@@ -255,7 +255,8 @@ async function requestGeneratedOutput(
   prompt: string,
   size: string,
   sourceImageUrl?: string | null,
-  generationMode: "force_image" | "image" | "auto" = "force_image"
+  generationMode: "force_image" | "image" | "auto" = "force_image",
+  conversationContext?: Array<{ role: "user" | "assistant"; content: string }>
 ) {
   const fallback = placeholderUrl(prompt, size);
   const {
@@ -271,7 +272,13 @@ async function requestGeneratedOutput(
         "Content-Type": "application/json",
         ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {})
       },
-      body: JSON.stringify({ prompt, size, sourceImageUrl, mode: generationMode }),
+      body: JSON.stringify({
+        prompt,
+        size,
+        sourceImageUrl,
+        mode: generationMode,
+        context: conversationContext ?? []
+      }),
       signal: controller.signal
     }).finally(() => {
       window.clearTimeout(timeout);
@@ -379,17 +386,30 @@ async function uploadImageToStorage(
   size: string,
   file?: File | null,
   sourceImageUrl?: string | null,
-  generationMode: "force_image" | "image" | "auto" = "force_image"
+  generationMode: "force_image" | "image" | "auto" = "force_image",
+  conversationContext?: Array<{ role: "user" | "assistant"; content: string }>
 ): Promise<GeneratedOutput> {
   const uploadedReferenceUrl = file ? await uploadBlobToStorage(file, "references") : null;
   const resolvedSourceImageUrl = uploadedReferenceUrl ?? sourceImageUrl;
   const generated = file
     ? null
-    : await requestGeneratedOutput(prompt, size, resolvedSourceImageUrl, generationMode);
+    : await requestGeneratedOutput(
+        prompt,
+        size,
+        resolvedSourceImageUrl,
+        generationMode,
+        conversationContext
+      );
 
   const generatedResult =
     generated ??
-    (await requestGeneratedOutput(prompt, size, resolvedSourceImageUrl, generationMode));
+    (await requestGeneratedOutput(
+      prompt,
+      size,
+      resolvedSourceImageUrl,
+      generationMode,
+      conversationContext
+    ));
 
   if (generatedResult.outputType === "text") {
     return generatedResult;
@@ -454,6 +474,7 @@ export async function generateAssetVersion(options: {
   referenceFile: File | null;
   sourceImageUrl?: string | null;
   generationMode?: "force_image" | "image" | "auto";
+  conversationContext?: Array<{ role: "user" | "assistant"; content: string }>;
 }) {
   const {
     activeAsset,
@@ -463,6 +484,7 @@ export async function generateAssetVersion(options: {
     referenceFile,
     sourceImageUrl,
     generationMode = "force_image",
+    conversationContext,
     roomId,
     size,
     style,
@@ -476,7 +498,8 @@ export async function generateAssetVersion(options: {
     size,
     referenceFile,
     sourceImageUrl,
-    generationMode
+    generationMode,
+    conversationContext
   );
   const imageUrl = generatedOutput.outputType === "image" ? generatedOutput.imageUrl : null;
   const responseText = generatedOutput.outputType === "text" ? generatedOutput.responseText : null;

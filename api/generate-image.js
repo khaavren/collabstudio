@@ -102,12 +102,35 @@ function inferOutputMode(prompt, requestedMode) {
     "package and ship"
   ];
 
-  const looksQuestion =
+  const looksTextIntent =
     normalized.includes("?") ||
     questionStarts.some((entry) => normalized.startsWith(entry)) ||
     advisorySignals.some((entry) => normalized.includes(entry));
 
-  return looksQuestion ? "text" : "image";
+  if (looksTextIntent) {
+    return "text";
+  }
+
+  return "image";
+}
+
+function normalizeContextMessages(value) {
+  if (!Array.isArray(value)) return [];
+
+  const normalized = [];
+  for (const entry of value) {
+    if (!entry || typeof entry !== "object") continue;
+    const role = entry.role === "assistant" ? "assistant" : entry.role === "user" ? "user" : null;
+    if (!role) continue;
+    const content = typeof entry.content === "string" ? entry.content.trim() : "";
+    if (!content) continue;
+    normalized.push({
+      role,
+      content: content.slice(0, 2000)
+    });
+  }
+
+  return normalized.slice(-16);
 }
 
 function shouldAllowFullRedesign(prompt) {
@@ -652,12 +675,30 @@ async function generateOpenAiText(options) {
 }
 
 async function classifyOpenAiOutputMode(options) {
-  const { apiKey, model, prompt, defaultParams } = options;
+  const { apiKey, model, prompt, defaultParams, contextMessages = [] } = options;
   const fallback = inferOutputMode(prompt, "auto");
   const resolvedModel = resolveOpenAiTextModelFromParams(model, defaultParams);
   const timeout = withTimeout(20000);
 
   try {
+    const inputMessages = [
+      {
+        role: "system",
+        content:
+          "Classify the user request for a collaborative design tool. Respond with exactly one token: IMAGE or TEXT. " +
+          "TEXT for analysis, recommendations, explanation, planning, Q&A. IMAGE for visual generation/edit/variant requests. " +
+          "When uncertain, respond TEXT."
+      },
+      ...contextMessages.map((message) => ({
+        role: message.role,
+        content: message.content
+      })),
+      {
+        role: "user",
+        content: prompt
+      }
+    ];
+
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
@@ -666,17 +707,7 @@ async function classifyOpenAiOutputMode(options) {
       },
       body: JSON.stringify({
         model: resolvedModel,
-        input: [
-          {
-            role: "system",
-            content:
-              "Classify the user request for a collaborative design tool. Respond with exactly one token: IMAGE or TEXT. IMAGE if the user wants a visual generation/edit/variant. TEXT if the user wants analysis, recommendation, explanation, planning, or Q&A."
-          },
-          {
-            role: "user",
-            content: prompt
-          }
-        ],
+        input: inputMessages,
         max_output_tokens: 4
       }),
       signal: timeout.signal
@@ -1036,6 +1067,7 @@ export default async function handler(req, res) {
     const size = normalizedSize(body.size);
     const sourceImageUrl = normalizedSourceImageUrl(body.sourceImageUrl);
     const requestedMode = resolveRequestedMode(body.mode);
+    const contextMessages = normalizeContextMessages(body.context);
     let outputMode = inferOutputMode(prompt, requestedMode);
 
     if (!prompt) {
@@ -1070,21 +1102,28 @@ export default async function handler(req, res) {
           }
 
           const defaultParams = readSafeDefaultParams(apiSetting.default_params);
-          if (requestedMode === "auto" && outputMode === "image" && providerUsed === "OpenAI") {
+          if (requestedMode === "auto" && providerUsed === "OpenAI") {
             outputMode = await classifyOpenAiOutputMode({
               apiKey: key,
               model: modelUsed,
               prompt,
-              defaultParams
+              defaultParams,
+              contextMessages
             });
           }
 
           if (outputMode === "text") {
+            const textInputContext =
+              contextMessages.length > 0
+                ? `\n\nConversation context:\n${contextMessages
+                    .map((message) => `${message.role === "assistant" ? "Assistant" : "User"}: ${message.content}`)
+                    .join("\n")}`
+                : "";
             const generated = await generateProviderText({
               provider: providerUsed,
               model: modelUsed,
               apiKey: key,
-              prompt,
+              prompt: `${prompt}${textInputContext}`,
               size,
               sourceImageUrl,
               defaultParams

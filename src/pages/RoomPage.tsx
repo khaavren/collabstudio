@@ -408,7 +408,8 @@ export function RoomPage() {
         notes: input.notes,
         referenceFile: input.referenceFile,
         sourceImageUrl,
-        generationMode: input.generationMode ?? "force_image"
+        generationMode: input.generationMode ?? "force_image",
+        conversationContext: input.conversationContext
       });
 
       setSelectedAssetId(assetId);
@@ -441,6 +442,20 @@ export function RoomPage() {
       versions.find((version) => version.id === activeVersionId) ??
       versions[0] ??
       null;
+    const context = [...versions]
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+      .flatMap((version) => {
+        const turns: Array<{ role: "user" | "assistant"; content: string }> = [
+          { role: "user", content: version.prompt }
+        ];
+
+        if (version.output_type === "text" && version.response_text) {
+          turns.push({ role: "assistant", content: version.response_text });
+        }
+
+        return turns;
+      })
+      .slice(-16);
 
     try {
       await handleGenerate({
@@ -451,7 +466,8 @@ export function RoomPage() {
         notes: "",
         referenceFile,
         sourceImageUrl: referenceFile ? null : baseVersion?.image_url ?? selectedAsset.image_url,
-        generationMode: "auto"
+        generationMode: "auto",
+        conversationContext: context
       });
     } catch {
       // Error banner is already set by handleGenerate.

@@ -72,4 +72,8 @@ export type GenerateInput = {
   referenceFile: File | null;
   sourceImageUrl?: string | null;
   generationMode?: "force_image" | "image" | "auto";
+  conversationContext?: Array<{
+    role: "user" | "assistant";
+    content: string;
+  }>;
 };
