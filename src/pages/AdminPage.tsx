@@ -351,81 +351,84 @@ export function AdminPage() {
 
     setIsLoading(true);
     setError(null);
+    try {
+      const response = await fetchWithAuth("/api/admin/settings", {
+        method: "GET"
+      });
 
-    const response = await fetchWithAuth("/api/admin/settings", {
-      method: "GET"
-    });
+      if (response.status === 403) {
+        setIsUnauthorized(true);
+        setSettings(null);
+        return;
+      }
 
-    if (response.status === 403) {
-      setIsUnauthorized(true);
+      const payload = await safeJson<AdminSettingsResponse | { error: string }>(
+        response,
+        "Admin API route is unavailable."
+      );
+
+      if (!response.ok) {
+        setError("error" in payload ? payload.error : "Failed to load admin settings.");
+        setSettings(null);
+        return;
+      }
+
+      const nextSettings = payload as AdminSettingsResponse;
+      setSettings(nextSettings);
+      setIsUnauthorized(false);
+
+      setOrgForm({
+        name: nextSettings.organization.name,
+        slug: nextSettings.organization.slug,
+        website: nextSettings.organization.website ?? "",
+        contactEmail: nextSettings.organization.contact_email ?? "",
+        phone: nextSettings.organization.phone ?? "",
+        addressLine1: nextSettings.organization.address_line1 ?? "",
+        addressLine2: nextSettings.organization.address_line2 ?? "",
+        city: nextSettings.organization.city ?? "",
+        state: nextSettings.organization.state ?? "",
+        postalCode: nextSettings.organization.postal_code ?? "",
+        country: nextSettings.organization.country ?? ""
+      });
+
+      const providerValue = normalizeProviderValue(nextSettings.apiSettings.provider || "OpenAI");
+      const modelValue = nextSettings.apiSettings.model || "";
+
+      setApiForm({
+        provider: providerValue,
+        model: nextSettings.apiSettings.model || "",
+        apiKey: "",
+        defaultImageSize: nextSettings.apiSettings.defaultImageSize || "1024x1024",
+        defaultParams: JSON.stringify(nextSettings.apiSettings.defaultParams ?? {}, null, 2)
+      });
+      setModelOptions(buildModelOptions(providerValue, [], modelValue));
+      setDiscoveredModelCount(0);
+      setHasStoredApiKey(Boolean(nextSettings.apiSettings.configured));
+      setIsEditingApiKey(false);
+
+      setTeamRoleDrafts(
+        Object.fromEntries(nextSettings.teamMembers.map((member) => [member.id, member.role]))
+      );
+      setTeamNameDrafts(
+        Object.fromEntries(
+          nextSettings.teamMembers.map((member) => [
+            member.id,
+            member.displayName ?? member.email?.split("@")[0] ?? ""
+          ])
+        )
+      );
+      setDeveloperRoleDrafts(
+        Object.fromEntries(
+          nextSettings.developerDashboard.users.map((entry) => [entry.userId, entry.employeeRole ?? "viewer"])
+        )
+      );
+    } catch (caught) {
       setSettings(null);
+      setIsUnauthorized(false);
+      setError(caught instanceof Error ? caught.message : "Failed to load admin settings.");
+    } finally {
       setIsLoading(false);
-      return;
     }
-
-    const payload = await safeJson<AdminSettingsResponse | { error: string }>(
-      response,
-      "Admin API route is unavailable."
-    );
-
-    if (!response.ok) {
-      setError("error" in payload ? payload.error : "Failed to load admin settings.");
-      setSettings(null);
-      setIsLoading(false);
-      return;
-    }
-
-    const nextSettings = payload as AdminSettingsResponse;
-    setSettings(nextSettings);
-    setIsUnauthorized(false);
-
-    setOrgForm({
-      name: nextSettings.organization.name,
-      slug: nextSettings.organization.slug,
-      website: nextSettings.organization.website ?? "",
-      contactEmail: nextSettings.organization.contact_email ?? "",
-      phone: nextSettings.organization.phone ?? "",
-      addressLine1: nextSettings.organization.address_line1 ?? "",
-      addressLine2: nextSettings.organization.address_line2 ?? "",
-      city: nextSettings.organization.city ?? "",
-      state: nextSettings.organization.state ?? "",
-      postalCode: nextSettings.organization.postal_code ?? "",
-      country: nextSettings.organization.country ?? ""
-    });
-
-    const providerValue = normalizeProviderValue(nextSettings.apiSettings.provider || "OpenAI");
-    const modelValue = nextSettings.apiSettings.model || "";
-
-    setApiForm({
-      provider: providerValue,
-      model: nextSettings.apiSettings.model || "",
-      apiKey: "",
-      defaultImageSize: nextSettings.apiSettings.defaultImageSize || "1024x1024",
-      defaultParams: JSON.stringify(nextSettings.apiSettings.defaultParams ?? {}, null, 2)
-    });
-    setModelOptions(buildModelOptions(providerValue, [], modelValue));
-    setDiscoveredModelCount(0);
-    setHasStoredApiKey(Boolean(nextSettings.apiSettings.configured));
-    setIsEditingApiKey(false);
-
-    setTeamRoleDrafts(
-      Object.fromEntries(nextSettings.teamMembers.map((member) => [member.id, member.role]))
-    );
-    setTeamNameDrafts(
-      Object.fromEntries(
-        nextSettings.teamMembers.map((member) => [
-          member.id,
-          member.displayName ?? member.email?.split("@")[0] ?? ""
-        ])
-      )
-    );
-    setDeveloperRoleDrafts(
-      Object.fromEntries(
-        nextSettings.developerDashboard.users.map((entry) => [entry.userId, entry.employeeRole ?? "viewer"])
-      )
-    );
-
-    setIsLoading(false);
   }, [user]);
 
   useEffect(() => {
