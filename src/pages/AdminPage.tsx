@@ -584,7 +584,10 @@ export function AdminPage() {
       }
 
       setAdminPassword("");
-      setMessage("Signed in.");
+      setMessage(null);
+      setUser(data.session.user ?? null);
+      window.location.assign("/admin");
+      return;
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to sign in.");
     } finally {
