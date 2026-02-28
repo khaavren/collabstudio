@@ -1,4 +1,5 @@
 import { HttpError, allowMethod, getJsonBody, sendJson } from "../_lib/http.js";
+import { getSupabaseAdminClient } from "../_lib/supabase.js";
 
 const MAX_AVATAR_URL_LENGTH = 2048;
 
@@ -10,25 +11,19 @@ function parseAccessToken(value) {
   return token.split(".").length === 3 ? token : null;
 }
 
-function parseSupabaseUrl(value) {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  if (!trimmed) return null;
+function decodeTokenPayload(token) {
+  const parts = token.split(".");
+  if (parts.length !== 3) return null;
 
   try {
-    const parsed = new URL(trimmed);
-    if (parsed.protocol !== "https:") return null;
-    if (!parsed.hostname.endsWith(".supabase.co")) return null;
-    return `${parsed.origin}`;
+    const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64 + "=".repeat((4 - (base64.length % 4 || 4)) % 4);
+    const decoded = Buffer.from(padded, "base64").toString("utf8");
+    const parsed = JSON.parse(decoded);
+    return parsed && typeof parsed === "object" ? parsed : null;
   } catch {
     return null;
   }
-}
-
-function parseAnonKey(value) {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
 }
 
 function sanitizeMetadata(metadata) {
@@ -48,69 +43,36 @@ function sanitizeMetadata(metadata) {
   return { repaired: false, userMetadata: next };
 }
 
-async function fetchAuthUser(supabaseUrl, anonKey, accessToken) {
-  const response = await fetch(`${supabaseUrl}/auth/v1/user`, {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      apikey: anonKey
-    }
-  });
-
-  if (!response.ok) {
-    return { user: null, status: response.status };
-  }
-
-  const payload = await response.json().catch(() => null);
-  if (!payload || typeof payload !== "object") {
-    return { user: null, status: 500 };
-  }
-
-  return { user: payload, status: 200 };
-}
-
-async function updateAuthUserMetadata(supabaseUrl, anonKey, accessToken, userMetadata) {
-  const response = await fetch(`${supabaseUrl}/auth/v1/user`, {
-    method: "PUT",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      apikey: anonKey,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      data: userMetadata
-    })
-  });
-
-  return response.ok;
-}
-
 async function handlePost(req, res) {
   const body = (await getJsonBody(req)) ?? {};
   const accessToken = parseAccessToken(body.accessToken);
-  const supabaseUrl = parseSupabaseUrl(body.supabaseUrl);
-  const supabaseAnonKey = parseAnonKey(body.supabaseAnonKey);
 
   if (!accessToken) {
     throw new HttpError("Valid accessToken is required.", 400);
   }
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new HttpError("Valid supabaseUrl and supabaseAnonKey are required.", 400);
-  }
 
-  const authUserResult = await fetchAuthUser(supabaseUrl, supabaseAnonKey, accessToken);
-  if (!authUserResult.user) {
+  const payload = decodeTokenPayload(accessToken);
+  const userId = typeof payload?.sub === "string" ? payload.sub : null;
+  if (!userId) {
     throw new HttpError("Invalid access token.", 401);
   }
 
-  const { repaired, userMetadata } = sanitizeMetadata(authUserResult.user.user_metadata);
+  const adminClient = getSupabaseAdminClient();
+  const { data: userRecord, error: userLookupError } = await adminClient.auth.admin.getUserById(userId);
+  if (userLookupError || !userRecord?.user) {
+    throw new HttpError("Invalid access token.", 401);
+  }
+
+  const { repaired, userMetadata } = sanitizeMetadata(userRecord.user.user_metadata);
   if (!repaired) {
     sendJson(res, 200, { ok: true, repaired: false });
     return;
   }
 
-  const updated = await updateAuthUserMetadata(supabaseUrl, supabaseAnonKey, accessToken, userMetadata);
-  if (!updated) {
+  const { error: updateError } = await adminClient.auth.admin.updateUserById(userId, {
+    user_metadata: userMetadata
+  });
+  if (updateError) {
     throw new HttpError("Unable to repair session metadata.", 500);
   }
 

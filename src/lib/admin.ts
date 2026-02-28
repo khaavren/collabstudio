@@ -88,7 +88,7 @@ export type AdminSettingsResponse = {
   };
 };
 
-const MAX_AUTH_HEADER_TOKEN_LENGTH = 12000;
+const MAX_AUTH_HEADER_TOKEN_LENGTH = 6000;
 
 function normalizeAccessToken(value: unknown) {
   if (typeof value !== "string") return null;
@@ -143,20 +143,9 @@ async function getAccessToken(options?: { forceRefresh?: boolean }) {
     throw new Error(error.message);
   }
 
-  const token = normalizeAccessToken(data.session?.access_token ?? null);
-  if (token && isSafeBearerToken(token)) {
-    if (canSendTokenInHeader(token)) return token;
-    const repaired = await repairOversizedSessionToken(token);
-    if (repaired) {
-      const { data: finalRefresh, error: finalRefreshError } = await supabase.auth.refreshSession();
-      if (!finalRefreshError) {
-        const finalToken = normalizeAccessToken(finalRefresh.session?.access_token ?? null);
-        if (finalToken && isSafeBearerToken(finalToken)) return finalToken;
-      }
-    }
-
-    // Fallback to the current token so callers can still attempt authenticated requests.
-    return token;
+  const currentToken = normalizeAccessToken(data.session?.access_token ?? null);
+  if (currentToken && isSafeBearerToken(currentToken) && canSendTokenInHeader(currentToken)) {
+    return currentToken;
   }
 
   // Recover from stale/corrupted local auth state without making a broken API request.
@@ -168,17 +157,14 @@ async function getAccessToken(options?: { forceRefresh?: boolean }) {
   if (canSendTokenInHeader(refreshedToken)) return refreshedToken;
 
   const repaired = await repairOversizedSessionToken(refreshedToken);
-  if (!repaired) {
-    // Fallback to refreshed token to avoid hard-blocking on repair endpoint failures.
-    return refreshedToken;
-  }
+  if (!repaired) return null;
 
   const { data: finalRefresh, error: finalRefreshError } = await supabase.auth.refreshSession();
   if (finalRefreshError) return null;
 
   const finalToken = normalizeAccessToken(finalRefresh.session?.access_token ?? null);
   if (!finalToken || !isSafeBearerToken(finalToken)) return null;
-  return finalToken;
+  return canSendTokenInHeader(finalToken) ? finalToken : null;
 }
 
 export async function fetchWithAuth(input: string, init?: RequestInit, options?: { forceRefresh?: boolean }) {
