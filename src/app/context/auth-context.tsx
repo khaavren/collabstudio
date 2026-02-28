@@ -74,6 +74,44 @@ function avatarNeedsCleanup(avatarUrl: string | null) {
   return avatarUrl.startsWith("data:") || avatarUrl.length > MAX_AVATAR_URL_LENGTH;
 }
 
+function mapSessionToAuthenticatedUser(session: { access_token?: string | null; user?: User | null } | null) {
+  if (!session?.access_token || !session.user) return null;
+  if (session.user.is_anonymous) return null;
+  return mapSupabaseUser(session.user);
+}
+
+function clearPersistedAuthState() {
+  try {
+    const localKeys: string[] = [];
+    for (let index = 0; index < localStorage.length; index += 1) {
+      const key = localStorage.key(index);
+      if (key) localKeys.push(key);
+    }
+    localKeys.forEach((key) => {
+      if (/^sb-.*-auth-token$/.test(key) || key === "supabase.auth.token") {
+        localStorage.removeItem(key);
+      }
+    });
+  } catch {
+    // Best-effort cleanup only.
+  }
+
+  try {
+    const sessionKeys: string[] = [];
+    for (let index = 0; index < sessionStorage.length; index += 1) {
+      const key = sessionStorage.key(index);
+      if (key) sessionKeys.push(key);
+    }
+    sessionKeys.forEach((key) => {
+      if (/^sb-.*-auth-token$/.test(key) || key === "supabase.auth.token") {
+        sessionStorage.removeItem(key);
+      }
+    });
+  } catch {
+    // Best-effort cleanup only.
+  }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
 
@@ -115,7 +153,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     async function syncSession() {
       const session = await resolveActiveSession();
       if (!active) return;
-      setUser(session?.user && session.access_token ? mapSupabaseUser(session.user) : null);
+      setUser(mapSessionToAuthenticatedUser(session));
     }
 
     void syncSession();
@@ -124,7 +162,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       data: { subscription }
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!active) return;
-      setUser(session?.user && session.access_token ? mapSupabaseUser(session.user) : null);
+      setUser(mapSessionToAuthenticatedUser(session));
     });
 
     return () => {
@@ -215,15 +253,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const localResult = await supabase.auth.signOut({ scope: "local" });
-    // Ensure the UI can always recover to a signed-out state.
     setUser(null);
+    clearPersistedAuthState();
+
+    const localResult = await supabase.auth.signOut({ scope: "local" });
 
     if (localResult.error) {
       const fallbackResult = await supabase.auth.signOut();
-      if (fallbackResult.error) {
-        return;
-      }
+      if (fallbackResult.error) return;
     }
   }
 
@@ -268,7 +305,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (data.user) {
       const session = await resolveActiveSession();
-      setUser(session?.user && session.access_token ? mapSupabaseUser(session.user) : null);
+      setUser(mapSessionToAuthenticatedUser(session));
     }
   }
 
