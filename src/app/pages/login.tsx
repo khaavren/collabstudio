@@ -14,6 +14,27 @@ export function LoginPage() {
   const [info, setInfo] = useState<string | null>(null);
 
   useEffect(() => {
+    const hash = window.location.hash.startsWith("#")
+      ? new URLSearchParams(window.location.hash.slice(1))
+      : new URLSearchParams(window.location.hash);
+    const recoveryType = hash.get("type");
+    const accessToken = hash.get("access_token");
+    const refreshToken = hash.get("refresh_token");
+    const query = new URLSearchParams(location.search);
+    const queryCode = query.get("code");
+
+    if (recoveryType === "recovery" && accessToken && refreshToken) {
+      const search = location.search || "";
+      navigate(`/reset-password${search}${window.location.hash}`, { replace: true });
+      return;
+    }
+
+    if (queryCode) {
+      navigate(`/reset-password${location.search}`, { replace: true });
+    }
+  }, [location.search, navigate]);
+
+  useEffect(() => {
     const params = new URLSearchParams(location.search);
     if (params.get("reset") === "success") {
       setInfo("Password reset successful. You can sign in with your new password.");
