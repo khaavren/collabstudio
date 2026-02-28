@@ -1,6 +1,6 @@
 import { getAuthenticatedUser } from "./_lib/auth.js";
 import { HttpError, allowMethod, getJsonBody, sendJson } from "./_lib/http.js";
-import { getSupabaseAdminClient } from "./_lib/supabase.js";
+import { getSupabaseAdminClient, getSupabaseServerAuthClient } from "./_lib/supabase.js";
 
 function parseDisplayName(value) {
   if (typeof value !== "string") return null;
@@ -26,6 +26,23 @@ function parseAvatarUrl(value) {
   } catch {
     return null;
   }
+}
+
+function parseEmail(value) {
+  if (typeof value !== "string") return null;
+  const email = value.trim().toLowerCase();
+  if (!email) return null;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return null;
+  return email;
+}
+
+function getRequestOrigin(req) {
+  const host = String(req.headers["x-forwarded-host"] ?? req.headers.host ?? "").trim();
+  if (!host) return null;
+
+  const forwardedProto = String(req.headers["x-forwarded-proto"] ?? "").trim().toLowerCase();
+  const protocol = forwardedProto === "https" || forwardedProto === "http" ? forwardedProto : "https";
+  return `${protocol}://${host}`;
 }
 
 function isMissingDisplayNameColumn(error) {
@@ -193,12 +210,48 @@ async function handlePatch(req, res) {
   });
 }
 
+async function handlePost(req, res) {
+  const body = (await getJsonBody(req)) ?? {};
+  const action = String(body.action ?? "").trim();
+  if (action !== "request-password-reset") {
+    sendJson(res, 400, { error: "Invalid action." });
+    return;
+  }
+
+  const email = parseEmail(body.email);
+  if (!email) {
+    sendJson(res, 400, { error: "Valid email is required." });
+    return;
+  }
+
+  const origin = getRequestOrigin(req);
+  if (!origin) {
+    throw new HttpError("Unable to resolve request origin.", 500);
+  }
+
+  const authClient = getSupabaseServerAuthClient();
+  const { error } = await authClient.auth.resetPasswordForEmail(email, {
+    redirectTo: `${origin}/reset-password`
+  });
+
+  if (error) {
+    throw new HttpError("Unable to send reset email at the moment.", 500);
+  }
+
+  sendJson(res, 200, { ok: true });
+}
+
 export default async function handler(req, res) {
-  if (!allowMethod(req, res, ["GET", "PATCH"])) return;
+  if (!allowMethod(req, res, ["GET", "PATCH", "POST"])) return;
 
   try {
     if (req.method === "GET") {
       await handleGet(req, res);
+      return;
+    }
+
+    if (req.method === "POST") {
+      await handlePost(req, res);
       return;
     }
 

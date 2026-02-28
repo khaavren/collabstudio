@@ -236,12 +236,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error("Email is required.");
     }
 
-    const response = await fetch("/api/auth/request-password-reset", {
+    const response = await fetch("/api/profile", {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
+        action: "request-password-reset",
         email: cleanEmail
       })
     });
