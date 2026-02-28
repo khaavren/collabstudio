@@ -306,6 +306,8 @@ export function AdminPage() {
   const [inviteRole, setInviteRole] = useState<TeamRole>("viewer");
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [adminEmail, setAdminEmail] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
+  const [isSigningIn, setIsSigningIn] = useState(false);
   const [activeTab, setActiveTab] = useState<AdminTab>("organization");
   const [developerSearch, setDeveloperSearch] = useState("");
   const [developerRoleFilter, setDeveloperRoleFilter] = useState<DeveloperRoleFilter>("all");
@@ -543,60 +545,51 @@ export function AdminPage() {
     }
   }
 
-  async function sendMagicLink(event: FormEvent<HTMLFormElement>) {
+  async function signInWithPassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
     setMessage(null);
 
-    if (!adminEmail.trim()) {
-      setError("Admin email is required.");
+    const email = adminEmail.trim().toLowerCase();
+    const password = adminPassword;
+
+    if (!email || !password.trim()) {
+      setError("Email and password are required.");
       return;
     }
 
-    const {
-      data: { session }
-    } = await supabase.auth.getSession();
+    setIsSigningIn(true);
+    try {
+      const {
+        data: { session }
+      } = await supabase.auth.getSession();
 
-    if (session?.user?.is_anonymous) {
-      await supabase.auth.signOut();
-    }
-
-    const email = adminEmail.trim();
-
-    const adminRedirect = `${window.location.origin}/admin`;
-    let signInError: string | null = null;
-
-    const primaryAttempt = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: adminRedirect
+      if (session?.user?.is_anonymous) {
+        await supabase.auth.signOut();
       }
-    });
 
-    if (primaryAttempt.error) {
-      const message = primaryAttempt.error.message.toLowerCase();
-      const shouldRetryWithoutCustomRedirect =
-        message.includes("redirect") || message.includes("not allowed") || message.includes("invalid");
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
 
-      if (shouldRetryWithoutCustomRedirect) {
-        const fallbackAttempt = await supabase.auth.signInWithOtp({
-          email
-        });
-
-        if (fallbackAttempt.error) {
-          signInError = fallbackAttempt.error.message;
-        }
-      } else {
-        signInError = primaryAttempt.error.message;
+      if (signInError) {
+        setError(signInError.message || "Unable to sign in.");
+        return;
       }
-    }
 
-    if (signInError) {
-      setError(signInError);
-      return;
-    }
+      if (!data.session?.access_token) {
+        setError("Signed in, but no session was established. Please try again.");
+        return;
+      }
 
-    setMessage("Magic link sent. Open the email and return to /admin.");
+      setAdminPassword("");
+      setMessage("Signed in.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to sign in.");
+    } finally {
+      setIsSigningIn(false);
+    }
   }
 
   async function signOut() {
@@ -835,7 +828,7 @@ export function AdminPage() {
         <div className="w-full space-y-4 rounded-xl border border-[var(--border)] bg-white p-5">
           <h1 className="text-lg font-medium text-[var(--foreground)]">Admin Sign In</h1>
           <p className="text-sm text-[var(--muted-foreground)]">
-            Use an email listed in ADMIN_EMAILS to access /admin.
+            Sign in with your owner or employee email and password to access /admin.
           </p>
 
           {error ? (
@@ -849,19 +842,34 @@ export function AdminPage() {
             </div>
           ) : null}
 
-          <form className="space-y-3" onSubmit={sendMagicLink}>
+          <form className="space-y-3" onSubmit={signInWithPassword}>
             <input
               className="w-full rounded-md border border-[var(--border)] px-3 py-2 text-sm"
+              disabled={isSigningIn}
               onChange={(event) => setAdminEmail(event.target.value)}
               placeholder="admin@company.com"
               type="email"
               value={adminEmail}
             />
+            <input
+              className="w-full rounded-md border border-[var(--border)] px-3 py-2 text-sm"
+              disabled={isSigningIn}
+              onChange={(event) => setAdminPassword(event.target.value)}
+              placeholder="Password"
+              type="password"
+              value={adminPassword}
+            />
+            <div className="flex justify-end">
+              <Link className="text-xs text-[var(--muted-foreground)] hover:underline" to="/forgot-password">
+                Forgot password?
+              </Link>
+            </div>
             <button
-              className="rounded-md bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white"
+              className="rounded-md bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+              disabled={isSigningIn}
               type="submit"
             >
-              Send Magic Link
+              {isSigningIn ? "Signing in..." : "Sign In"}
             </button>
           </form>
 
