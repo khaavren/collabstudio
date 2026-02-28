@@ -1,4 +1,4 @@
-import { getAuthenticatedUser } from "./_lib/auth.js";
+import { getAuthenticatedUser, requireAdmin } from "./_lib/auth.js";
 import { HttpError, allowMethod, getJsonBody, sendJson } from "./_lib/http.js";
 import { getSupabaseAdminClient, getSupabaseServerAuthClient } from "./_lib/supabase.js";
 
@@ -34,6 +34,13 @@ function parseEmail(value) {
   if (!email) return null;
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return null;
   return email;
+}
+
+function parsePassword(value) {
+  if (typeof value !== "string") return null;
+  const password = value.trim();
+  if (password.length < 8 || password.length > 256) return null;
+  return password;
 }
 
 function getRequestOrigin(req) {
@@ -213,8 +220,36 @@ async function handlePatch(req, res) {
 async function handlePost(req, res) {
   const body = (await getJsonBody(req)) ?? {};
   const action = String(body.action ?? "").trim();
-  if (action !== "request-password-reset") {
+  if (action !== "request-password-reset" && action !== "admin-set-password") {
     sendJson(res, 400, { error: "Invalid action." });
+    return;
+  }
+
+  if (action === "admin-set-password") {
+    const userId = String(body.userId ?? "").trim();
+    const newPassword = parsePassword(body.newPassword);
+
+    if (!userId) {
+      sendJson(res, 400, { error: "User ID is required." });
+      return;
+    }
+
+    if (!newPassword) {
+      sendJson(res, 400, { error: "Password must be 8-256 characters." });
+      return;
+    }
+
+    await requireAdmin(req);
+    const adminClient = getSupabaseAdminClient();
+    const { error } = await adminClient.auth.admin.updateUserById(userId, {
+      password: newPassword
+    });
+
+    if (error) {
+      throw new HttpError("Unable to update user password.", 500);
+    }
+
+    sendJson(res, 200, { ok: true, message: "Password updated." });
     return;
   }
 

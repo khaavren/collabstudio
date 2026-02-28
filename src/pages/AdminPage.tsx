@@ -768,6 +768,50 @@ export function AdminPage() {
     }
   }
 
+  async function setDeveloperPassword(entry: DeveloperUserRow) {
+    if (!ensureAdminAccess()) return;
+
+    const targetLabel = entry.email ?? entry.displayName ?? entry.userId;
+    const nextPassword = window.prompt(`Set a new password for ${targetLabel}`, "");
+    if (!nextPassword) return;
+
+    if (nextPassword.trim().length < 8) {
+      setError("Password must be at least 8 characters.");
+      return;
+    }
+
+    setUserActionInFlight(entry.userId);
+    setError(null);
+    setMessage(null);
+
+    try {
+      const response = await fetchWithAuth("/api/profile", {
+        method: "POST",
+        body: JSON.stringify({
+          action: "admin-set-password",
+          userId: entry.userId,
+          newPassword: nextPassword
+        })
+      });
+
+      const payload = await safeJson<{ message?: string; error?: string }>(
+        response,
+        "Unable to update password."
+      );
+
+      if (!response.ok) {
+        setError(payload.error ?? "Unable to update password.");
+        return;
+      }
+
+      setMessage(payload.message ?? "Password updated.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to update password.");
+    } finally {
+      setUserActionInFlight(null);
+    }
+  }
+
   async function testConnection() {
     if (!ensureAdminAccess()) return;
     setIsTesting(true);
@@ -1502,6 +1546,16 @@ export function AdminPage() {
                                     {isBusy ? "Granting..." : "Grant access"}
                                   </button>
                                 )}
+                                <button
+                                  className="text-[#2b66d5] hover:underline disabled:opacity-60"
+                                  disabled={isBusy || !canManageAdminSettings}
+                                  onClick={() => {
+                                    void setDeveloperPassword(entry);
+                                  }}
+                                  type="button"
+                                >
+                                  Set password
+                                </button>
                               </td>
                             </tr>
                           );
