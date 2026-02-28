@@ -8,6 +8,11 @@ function parseHashParams() {
   return new URLSearchParams(raw);
 }
 
+function parseRecoveryType(rawType: string | null) {
+  const normalized = String(rawType ?? "").trim().toLowerCase();
+  return normalized === "recovery" ? "recovery" : null;
+}
+
 export function ResetPasswordPage() {
   const navigate = useNavigate();
   const [newPassword, setNewPassword] = useState("");
@@ -37,14 +42,30 @@ export function ResetPasswordPage() {
         const hashParams = parseHashParams();
         const queryParams = new URLSearchParams(window.location.search);
 
+        const hashError = hashParams.get("error_description") ?? hashParams.get("error");
+        const queryError = queryParams.get("error_description") ?? queryParams.get("error");
+        if (hashError || queryError) {
+          throw new Error("Reset link is invalid or expired. Request a new reset link.");
+        }
+
         const accessToken = hashParams.get("access_token");
         const refreshToken = hashParams.get("refresh_token");
-        const recoveryType = hashParams.get("type");
+        const recoveryType = parseRecoveryType(hashParams.get("type") ?? queryParams.get("type"));
         const code = queryParams.get("code");
+        const tokenHash = queryParams.get("token_hash");
 
         if (code) {
           const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
           if (exchangeError) {
+            throw new Error("Reset link is invalid or expired. Request a new reset link.");
+          }
+        } else if (tokenHash && recoveryType === "recovery") {
+          const { error: verifyError } = await supabase.auth.verifyOtp({
+            type: "recovery",
+            token_hash: tokenHash
+          });
+
+          if (verifyError) {
             throw new Error("Reset link is invalid or expired. Request a new reset link.");
           }
         } else if (accessToken && refreshToken && recoveryType === "recovery") {
