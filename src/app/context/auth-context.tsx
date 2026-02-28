@@ -235,15 +235,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!cleanEmail) {
       throw new Error("Email is required.");
     }
-    if (!isSupabaseConfigured) {
-      throw new Error("Supabase is not configured.");
-    }
 
-    const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
-      redirectTo: `${window.location.origin}/reset-password`
+    const response = await fetch("/api/auth/request-password-reset", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        email: cleanEmail
+      })
     });
-    if (error) {
-      throw new Error(error.message || "Unable to send reset email.");
+
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => ({}))) as { error?: string };
+      const message = typeof payload.error === "string" ? payload.error : "Unable to send reset email.";
+      throw new Error(message);
     }
   }
 
