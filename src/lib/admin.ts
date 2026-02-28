@@ -70,13 +70,21 @@ function canSendTokenInHeader(token: string) {
 }
 
 async function repairOversizedSessionToken(token: string) {
+  const supabaseUrl = String(import.meta.env.VITE_SUPABASE_URL ?? "").trim();
+  const supabaseAnonKey = String(import.meta.env.VITE_SUPABASE_ANON_KEY ?? "").trim();
+  if (!supabaseUrl || !supabaseAnonKey) return false;
+
   try {
     const response = await fetch("/api/auth/repair-session", {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({ accessToken: token })
+      body: JSON.stringify({
+        accessToken: token,
+        supabaseUrl,
+        supabaseAnonKey
+      })
     });
 
     if (!response.ok) return false;
