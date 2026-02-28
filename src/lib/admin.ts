@@ -88,7 +88,7 @@ export type AdminSettingsResponse = {
   };
 };
 
-const MAX_AUTH_HEADER_TOKEN_LENGTH = 6000;
+const MAX_AUTH_HEADER_TOKEN_LENGTH = 12000;
 
 function normalizeAccessToken(value: unknown) {
   if (typeof value !== "string") return null;
@@ -146,7 +146,17 @@ async function getAccessToken(options?: { forceRefresh?: boolean }) {
   const token = normalizeAccessToken(data.session?.access_token ?? null);
   if (token && isSafeBearerToken(token)) {
     if (canSendTokenInHeader(token)) return token;
-    await repairOversizedSessionToken(token);
+    const repaired = await repairOversizedSessionToken(token);
+    if (repaired) {
+      const { data: finalRefresh, error: finalRefreshError } = await supabase.auth.refreshSession();
+      if (!finalRefreshError) {
+        const finalToken = normalizeAccessToken(finalRefresh.session?.access_token ?? null);
+        if (finalToken && isSafeBearerToken(finalToken)) return finalToken;
+      }
+    }
+
+    // Fallback to the current token so callers can still attempt authenticated requests.
+    return token;
   }
 
   // Recover from stale/corrupted local auth state without making a broken API request.
@@ -158,14 +168,17 @@ async function getAccessToken(options?: { forceRefresh?: boolean }) {
   if (canSendTokenInHeader(refreshedToken)) return refreshedToken;
 
   const repaired = await repairOversizedSessionToken(refreshedToken);
-  if (!repaired) return null;
+  if (!repaired) {
+    // Fallback to refreshed token to avoid hard-blocking on repair endpoint failures.
+    return refreshedToken;
+  }
 
   const { data: finalRefresh, error: finalRefreshError } = await supabase.auth.refreshSession();
   if (finalRefreshError) return null;
 
   const finalToken = normalizeAccessToken(finalRefresh.session?.access_token ?? null);
   if (!finalToken || !isSafeBearerToken(finalToken)) return null;
-  return canSendTokenInHeader(finalToken) ? finalToken : null;
+  return finalToken;
 }
 
 export async function fetchWithAuth(input: string, init?: RequestInit, options?: { forceRefresh?: boolean }) {
