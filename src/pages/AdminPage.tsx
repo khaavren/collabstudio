@@ -62,7 +62,9 @@ type ApiTestResponse = {
   error?: string;
 };
 
-type AdminTab = "organization" | "account" | "model" | "usage" | "security";
+type AdminTab = "organization" | "account" | "developer" | "model" | "usage" | "security";
+type DeveloperUserRow = AdminSettingsResponse["developerDashboard"]["users"][number];
+type DeveloperRoleFilter = "all" | TeamRole | "none";
 const WORKSPACE_PATH = "/";
 
 function recommendedModelsForProvider(provider: string) {
@@ -235,6 +237,13 @@ function publicStorageUrl(path: string | null) {
   return data.publicUrl;
 }
 
+function formatDateTime(value: string | null) {
+  if (!value) return "Never";
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) return value;
+  return new Date(parsed).toLocaleString();
+}
+
 async function safeJson<T>(response: Response, fallbackMessage: string): Promise<T> {
   const raw = await response.text();
 
@@ -298,6 +307,10 @@ export function AdminPage() {
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [adminEmail, setAdminEmail] = useState("");
   const [activeTab, setActiveTab] = useState<AdminTab>("organization");
+  const [developerSearch, setDeveloperSearch] = useState("");
+  const [developerRoleFilter, setDeveloperRoleFilter] = useState<DeveloperRoleFilter>("all");
+  const [developerRoleDrafts, setDeveloperRoleDrafts] = useState<Record<string, TeamRole>>({});
+  const [userActionInFlight, setUserActionInFlight] = useState<string | null>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -404,6 +417,11 @@ export function AdminPage() {
         ])
       )
     );
+    setDeveloperRoleDrafts(
+      Object.fromEntries(
+        nextSettings.developerDashboard.users.map((entry) => [entry.userId, entry.employeeRole ?? "viewer"])
+      )
+    );
 
     setIsLoading(false);
   }, [user]);
@@ -427,7 +445,43 @@ export function AdminPage() {
     };
   }, [logoPreview]);
 
+  const developerUsers = settings?.developerDashboard.users ?? [];
+  const filteredDeveloperUsers = useMemo(() => {
+    const searchValue = developerSearch.trim().toLowerCase();
+
+    return developerUsers.filter((entry) => {
+      const matchesSearch =
+        searchValue.length === 0 ||
+        String(entry.email ?? "")
+          .toLowerCase()
+          .includes(searchValue) ||
+        String(entry.displayName ?? "")
+          .toLowerCase()
+          .includes(searchValue) ||
+        entry.userId.toLowerCase().includes(searchValue);
+
+      const matchesRole =
+        developerRoleFilter === "all"
+          ? true
+          : developerRoleFilter === "none"
+            ? !entry.isEmployee
+            : entry.employeeRole === developerRoleFilter;
+
+      return matchesSearch && matchesRole;
+    });
+  }, [developerRoleFilter, developerSearch, developerUsers]);
+
+  function ensureAdminAccess() {
+    if (!settings?.access.isAdmin) {
+      setError("Admin role is required for this action.");
+      return false;
+    }
+
+    return true;
+  }
+
   async function saveSettings() {
+    if (!ensureAdminAccess()) return;
     if (!settings) return;
 
     setIsSaving(true);
@@ -553,6 +607,7 @@ export function AdminPage() {
 
   async function inviteMember(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!ensureAdminAccess()) return;
 
     setIsInviting(true);
     setError(null);
@@ -582,6 +637,7 @@ export function AdminPage() {
   }
 
   async function updateMember(memberId: string) {
+    if (!ensureAdminAccess()) return;
     setError(null);
     setMessage(null);
 
@@ -606,6 +662,7 @@ export function AdminPage() {
   }
 
   async function removeMember(memberId: string) {
+    if (!ensureAdminAccess()) return;
     const response = await fetchWithAuth(`/api/admin/team/${memberId}`, {
       method: "DELETE"
     });
@@ -621,7 +678,105 @@ export function AdminPage() {
     await loadSettings();
   }
 
+  async function grantEmployeeAccess(entry: DeveloperUserRow) {
+    if (!ensureAdminAccess()) return;
+    if (!entry.email) {
+      setError("User email unavailable. Cannot grant employee access.");
+      return;
+    }
+
+    setUserActionInFlight(entry.userId);
+    setError(null);
+    setMessage(null);
+
+    try {
+      const role = developerRoleDrafts[entry.userId] ?? "viewer";
+      const response = await fetchWithAuth("/api/admin/team/invite", {
+        method: "POST",
+        body: JSON.stringify({
+          email: entry.email,
+          role
+        })
+      });
+
+      const payload = await safeJson<{ message?: string; error?: string }>(response, "Unable to grant access.");
+      if (!response.ok) {
+        setError(payload.error ?? "Unable to grant access.");
+        return;
+      }
+
+      setMessage(payload.message ?? "Employee access granted.");
+      await loadSettings();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to grant access.");
+    } finally {
+      setUserActionInFlight(null);
+    }
+  }
+
+  async function updateDeveloperMember(entry: DeveloperUserRow) {
+    if (!ensureAdminAccess()) return;
+    if (!entry.teamMemberId) return;
+
+    setUserActionInFlight(entry.userId);
+    setError(null);
+    setMessage(null);
+
+    try {
+      const role = developerRoleDrafts[entry.userId] ?? entry.employeeRole ?? "viewer";
+      const response = await fetchWithAuth(`/api/admin/team/${entry.teamMemberId}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          role,
+          displayName: entry.displayName ?? ""
+        })
+      });
+
+      const payload = await safeJson<{ error?: string }>(response, "Unable to update employee role.");
+      if (!response.ok) {
+        setError(payload.error ?? "Unable to update employee role.");
+        return;
+      }
+
+      setMessage("Employee role updated.");
+      await loadSettings();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to update employee role.");
+    } finally {
+      setUserActionInFlight(null);
+    }
+  }
+
+  async function revokeEmployeeAccess(entry: DeveloperUserRow) {
+    if (!ensureAdminAccess()) return;
+    if (!entry.teamMemberId) return;
+
+    setUserActionInFlight(entry.userId);
+    setError(null);
+    setMessage(null);
+
+    try {
+      const response = await fetchWithAuth(`/api/admin/team/${entry.teamMemberId}`, {
+        method: "DELETE"
+      });
+
+      const payload = await safeJson<{ error?: string }>(response, "Unable to revoke access.");
+      if (!response.ok) {
+        setError(payload.error ?? "Unable to revoke access.");
+        return;
+      }
+
+      setMessage("Employee access revoked.");
+      await loadSettings();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to revoke access.");
+    } finally {
+      setUserActionInFlight(null);
+    }
+  }
+
   async function testConnection() {
+    if (!ensureAdminAccess()) return;
     setIsTesting(true);
     setTestMessage(null);
     try {
@@ -747,9 +902,11 @@ export function AdminPage() {
   }
 
   const logoUrl = publicStorageUrl(settings.organization.logo_storage_path);
+  const canManageAdminSettings = settings.access.isAdmin;
   const tabs: Array<{ id: AdminTab; label: string }> = [
     { id: "organization", label: "Organization Profile" },
     { id: "account", label: "Account & Team" },
+    { id: "developer", label: "Developer Users & Usage" },
     { id: "model", label: "Model API Configuration" },
     { id: "usage", label: "Usage & Limits" },
     { id: "security", label: "Security & Environment" }
@@ -831,6 +988,12 @@ export function AdminPage() {
             {message ? (
               <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
                 {message}
+              </div>
+            ) : null}
+            {!canManageAdminSettings ? (
+              <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+                You are signed in as <span className="font-semibold">{settings.access.role}</span>. Monitoring is
+                available, but management actions require admin role.
               </div>
             ) : null}
 
@@ -976,7 +1139,8 @@ export function AdminPage() {
                         type="file"
                       />
                       <button
-                        className="mx-auto inline-flex w-full max-w-[220px] items-center justify-center gap-2 rounded-md bg-[#2b66d5] px-4 py-2 text-lg font-semibold text-white transition hover:bg-[#2457b5]"
+                        className="mx-auto inline-flex w-full max-w-[220px] items-center justify-center gap-2 rounded-md bg-[#2b66d5] px-4 py-2 text-lg font-semibold text-white transition hover:bg-[#2457b5] disabled:opacity-60"
+                        disabled={!canManageAdminSettings}
                         onClick={() => logoInputRef.current?.click()}
                         type="button"
                       >
@@ -990,7 +1154,7 @@ export function AdminPage() {
                 <div className="border-t border-slate-300 px-6 py-4 text-center">
                   <button
                     className="rounded-md bg-[#2b66d5] px-8 py-2 text-base font-semibold text-white transition hover:bg-[#2457b5] disabled:opacity-60"
-                    disabled={isSaving}
+                    disabled={isSaving || !canManageAdminSettings}
                     onClick={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
@@ -1014,6 +1178,7 @@ export function AdminPage() {
                   <form className="mb-4 grid gap-2 sm:grid-cols-[1fr_180px_170px]" onSubmit={inviteMember}>
                     <input
                       className="rounded-md border border-slate-300 bg-white px-3 py-2 text-lg"
+                      disabled={!canManageAdminSettings}
                       onChange={(event) => setInviteEmail(event.target.value)}
                       placeholder="member@company.com"
                       required
@@ -1022,6 +1187,7 @@ export function AdminPage() {
                     />
                     <select
                       className="rounded-md border border-slate-300 bg-white px-3 py-2 text-lg"
+                      disabled={!canManageAdminSettings}
                       onChange={(event) => setInviteRole(event.target.value as TeamRole)}
                       value={inviteRole}
                     >
@@ -1031,7 +1197,7 @@ export function AdminPage() {
                     </select>
                     <button
                       className="rounded-md bg-[#2b66d5] px-4 py-2 text-lg font-semibold text-white transition hover:bg-[#2457b5] disabled:opacity-60"
-                      disabled={isInviting}
+                      disabled={isInviting || !canManageAdminSettings}
                       type="submit"
                     >
                       {isInviting ? "Inviting..." : "Invite New Member"}
@@ -1057,6 +1223,7 @@ export function AdminPage() {
                               <td className="space-y-1 px-4 py-3">
                                 <input
                                   className="w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-base font-medium text-slate-800"
+                                  disabled={!canManageAdminSettings}
                                   onChange={(event) =>
                                     setTeamNameDrafts((current) => ({
                                       ...current,
@@ -1072,6 +1239,7 @@ export function AdminPage() {
                               <td className="px-4 py-3">
                                 <select
                                   className="w-full max-w-[180px] rounded-md border border-slate-300 bg-white px-2 py-1 text-lg"
+                                  disabled={!canManageAdminSettings}
                                   onChange={(event) =>
                                     setTeamRoleDrafts((current) => ({
                                       ...current,
@@ -1087,7 +1255,8 @@ export function AdminPage() {
                               </td>
                               <td className="space-x-3 px-4 py-3 text-lg">
                                 <button
-                                  className="text-[#2b66d5] hover:underline"
+                                  className="text-[#2b66d5] hover:underline disabled:opacity-50"
+                                  disabled={!canManageAdminSettings}
                                   onClick={() => {
                                     void updateMember(member.id);
                                   }}
@@ -1096,7 +1265,8 @@ export function AdminPage() {
                                   Save
                                 </button>
                                 <button
-                                  className="text-[#2b66d5] hover:underline"
+                                  className="text-[#2b66d5] hover:underline disabled:opacity-50"
+                                  disabled={!canManageAdminSettings}
                                   onClick={() => {
                                     void removeMember(member.id);
                                   }}
@@ -1115,6 +1285,226 @@ export function AdminPage() {
               </section>
             ) : null}
 
+            {activeTab === "developer" ? (
+              <section className="space-y-4 rounded-lg border border-slate-300 bg-[#f8f9fb] p-5">
+                <div className="space-y-1">
+                  <h2 className="text-2xl font-semibold text-[#243042]">Developer Users & Usage</h2>
+                  <p className="text-sm text-slate-500">
+                    Monitor all app users, activity, and employee access from one place.
+                  </p>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <div className="rounded-md border border-slate-300 bg-white p-4">
+                    <p className="text-sm uppercase tracking-wide text-slate-500">Total Users</p>
+                    <p className="mt-2 text-2xl font-semibold text-slate-800">
+                      {settings.developerDashboard.summary.totalUsers}
+                    </p>
+                  </div>
+                  <div className="rounded-md border border-slate-300 bg-white p-4">
+                    <p className="text-sm uppercase tracking-wide text-slate-500">Active (30d)</p>
+                    <p className="mt-2 text-2xl font-semibold text-slate-800">
+                      {settings.developerDashboard.summary.activeUsers30d}
+                    </p>
+                  </div>
+                  <div className="rounded-md border border-slate-300 bg-white p-4">
+                    <p className="text-sm uppercase tracking-wide text-slate-500">Employees</p>
+                    <p className="mt-2 text-2xl font-semibold text-slate-800">
+                      {settings.developerDashboard.summary.employeeUsers}
+                    </p>
+                  </div>
+                  <div className="rounded-md border border-slate-300 bg-white p-4">
+                    <p className="text-sm uppercase tracking-wide text-slate-500">Inactive Users</p>
+                    <p className="mt-2 text-2xl font-semibold text-slate-800">
+                      {settings.developerDashboard.summary.inactiveUsers}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  <div className="rounded-md border border-slate-300 bg-white p-4">
+                    <p className="text-sm uppercase tracking-wide text-slate-500">Workspaces</p>
+                    <p className="mt-2 text-xl font-semibold text-slate-800">
+                      {settings.developerDashboard.totals.workspaces}
+                    </p>
+                  </div>
+                  <div className="rounded-md border border-slate-300 bg-white p-4">
+                    <p className="text-sm uppercase tracking-wide text-slate-500">Workspace Collaborators</p>
+                    <p className="mt-2 text-xl font-semibold text-slate-800">
+                      {settings.developerDashboard.totals.workspaceCollaborators}
+                    </p>
+                  </div>
+                  <div className="rounded-md border border-slate-300 bg-white p-4">
+                    <p className="text-sm uppercase tracking-wide text-slate-500">Rooms</p>
+                    <p className="mt-2 text-xl font-semibold text-slate-800">
+                      {settings.developerDashboard.totals.rooms}
+                    </p>
+                  </div>
+                  <div className="rounded-md border border-slate-300 bg-white p-4">
+                    <p className="text-sm uppercase tracking-wide text-slate-500">Assets</p>
+                    <p className="mt-2 text-xl font-semibold text-slate-800">
+                      {settings.developerDashboard.totals.assets}
+                    </p>
+                  </div>
+                  <div className="rounded-md border border-slate-300 bg-white p-4">
+                    <p className="text-sm uppercase tracking-wide text-slate-500">Asset Versions</p>
+                    <p className="mt-2 text-xl font-semibold text-slate-800">
+                      {settings.developerDashboard.totals.assetVersions}
+                    </p>
+                  </div>
+                  <div className="rounded-md border border-slate-300 bg-white p-4">
+                    <p className="text-sm uppercase tracking-wide text-slate-500">Comments</p>
+                    <p className="mt-2 text-xl font-semibold text-slate-800">
+                      {settings.developerDashboard.totals.comments}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid gap-2 sm:grid-cols-[minmax(240px,1fr)_220px]">
+                  <input
+                    className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+                    onChange={(event) => setDeveloperSearch(event.target.value)}
+                    placeholder="Search user by email, name, or user id"
+                    value={developerSearch}
+                  />
+                  <select
+                    className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+                    onChange={(event) => setDeveloperRoleFilter(event.target.value as DeveloperRoleFilter)}
+                    value={developerRoleFilter}
+                  >
+                    <option value="all">All users</option>
+                    <option value="none">Not employees</option>
+                    <option value="admin">Employees: Admin</option>
+                    <option value="editor">Employees: Editor</option>
+                    <option value="viewer">Employees: Viewer</option>
+                  </select>
+                </div>
+
+                <div className="overflow-x-auto rounded-md border border-slate-300 bg-white">
+                  <table className="w-full min-w-[1180px] text-left">
+                    <thead className="border-b border-slate-300 bg-[#f1f4f8] text-sm text-slate-600">
+                      <tr>
+                        <th className="px-4 py-2 font-semibold">User</th>
+                        <th className="px-4 py-2 font-semibold">Last Sign In</th>
+                        <th className="px-4 py-2 font-semibold">Workspace Usage</th>
+                        <th className="px-4 py-2 font-semibold">Employee Access</th>
+                        <th className="px-4 py-2 font-semibold">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredDeveloperUsers.length === 0 ? (
+                        <tr>
+                          <td className="px-4 py-6 text-sm text-slate-500" colSpan={5}>
+                            No users match the current filter.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredDeveloperUsers.map((entry) => {
+                          const isBusy = userActionInFlight === entry.userId;
+                          const isSelf = entry.userId === user.id;
+                          const currentRole = developerRoleDrafts[entry.userId] ?? entry.employeeRole ?? "viewer";
+                          const accountStatusClass =
+                            entry.accountStatus === "active"
+                              ? "bg-emerald-100 text-emerald-700"
+                              : entry.accountStatus === "idle"
+                                ? "bg-amber-100 text-amber-800"
+                                : "bg-slate-200 text-slate-700";
+
+                          return (
+                            <tr className="border-b border-slate-200 last:border-b-0" key={entry.userId}>
+                              <td className="space-y-1 px-4 py-3">
+                                <p className="font-semibold text-slate-800">
+                                  {entry.displayName ?? entry.email ?? "Unknown user"}
+                                </p>
+                                <p className="text-sm text-slate-600">{entry.email ?? "Email unavailable"}</p>
+                                <p className="text-xs text-slate-500">User ID: {entry.userId}</p>
+                                <p className="text-xs text-slate-500">Joined: {formatDateTime(entry.createdAt)}</p>
+                              </td>
+                              <td className="space-y-1 px-4 py-3 text-sm text-slate-700">
+                                <p>{formatDateTime(entry.lastSignInAt)}</p>
+                                <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${accountStatusClass}`}>
+                                  {entry.accountStatus === "never" ? "Never signed in" : entry.accountStatus}
+                                </span>
+                              </td>
+                              <td className="space-y-1 px-4 py-3 text-sm text-slate-700">
+                                <p>Owned: {entry.ownedWorkspaceCount}</p>
+                                <p>Collaborator: {entry.collaboratorWorkspaceCount}</p>
+                                <p>Total: {entry.totalWorkspaceCount}</p>
+                                <p className="text-xs text-slate-500">
+                                  Last workspace activity: {formatDateTime(entry.lastWorkspaceActivityAt)}
+                                </p>
+                              </td>
+                              <td className="space-y-2 px-4 py-3">
+                                <span
+                                  className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${
+                                    entry.isEmployee ? "bg-blue-100 text-blue-700" : "bg-slate-200 text-slate-700"
+                                  }`}
+                                >
+                                  {entry.isEmployee ? `Employee (${entry.employeeRole})` : "No employee access"}
+                                </span>
+                                <select
+                                  className="block w-full max-w-[180px] rounded-md border border-slate-300 bg-white px-2 py-1 text-sm"
+                                  disabled={!canManageAdminSettings}
+                                  onChange={(event) =>
+                                    setDeveloperRoleDrafts((current) => ({
+                                      ...current,
+                                      [entry.userId]: event.target.value as TeamRole
+                                    }))
+                                  }
+                                  value={currentRole}
+                                >
+                                  <option value="admin">Admin</option>
+                                  <option value="editor">Editor</option>
+                                  <option value="viewer">Viewer</option>
+                                </select>
+                              </td>
+                              <td className="space-x-3 px-4 py-3 text-sm">
+                                {entry.isEmployee ? (
+                                  <>
+                                    <button
+                                      className="text-[#2b66d5] hover:underline disabled:opacity-60"
+                                      disabled={isBusy || !canManageAdminSettings}
+                                      onClick={() => {
+                                        void updateDeveloperMember(entry);
+                                      }}
+                                      type="button"
+                                    >
+                                      {isBusy ? "Saving..." : "Update role"}
+                                    </button>
+                                    <button
+                                      className="text-[#2b66d5] hover:underline disabled:opacity-60"
+                                      disabled={isBusy || isSelf || !canManageAdminSettings}
+                                      onClick={() => {
+                                        void revokeEmployeeAccess(entry);
+                                      }}
+                                      type="button"
+                                    >
+                                      Revoke access
+                                    </button>
+                                  </>
+                                ) : (
+                                  <button
+                                    className="text-[#2b66d5] hover:underline disabled:opacity-60"
+                                    disabled={isBusy || !entry.email || !canManageAdminSettings}
+                                    onClick={() => {
+                                      void grantEmployeeAccess(entry);
+                                    }}
+                                    type="button"
+                                  >
+                                    {isBusy ? "Granting..." : "Grant access"}
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            ) : null}
+
             {activeTab === "model" ? (
               <section className="rounded-lg border border-slate-300 bg-[#f8f9fb]">
                 <div className="border-b border-slate-300 px-5 py-4">
@@ -1126,6 +1516,7 @@ export function AdminPage() {
                     Provider
                     <select
                       className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-lg"
+                      disabled={!canManageAdminSettings}
                       onChange={(event) => {
                         const nextProvider = event.target.value;
                         const fallbackModels = buildModelOptions(nextProvider, [], "");
@@ -1152,6 +1543,7 @@ export function AdminPage() {
                     Model Name
                     <input
                       className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-lg"
+                      disabled={!canManageAdminSettings}
                       onChange={(event) => setApiForm((current) => ({ ...current, model: event.target.value }))}
                       placeholder="Enter model name or choose from discovered list"
                       value={apiForm.model}
@@ -1159,6 +1551,7 @@ export function AdminPage() {
                     {modelOptions.length > 0 ? (
                       <select
                         className="mt-2 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-base font-normal"
+                        disabled={!canManageAdminSettings}
                         onChange={(event) =>
                           setApiForm((current) => ({
                             ...current,
@@ -1189,6 +1582,7 @@ export function AdminPage() {
                     API Key
                     <input
                       className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-lg"
+                      disabled={!canManageAdminSettings}
                       onBlur={() => {
                         if (hasStoredApiKey && isEditingApiKey && apiForm.apiKey.trim().length === 0) {
                           setIsEditingApiKey(false);
@@ -1226,6 +1620,7 @@ export function AdminPage() {
                     Default Image Size
                     <input
                       className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-lg"
+                      disabled={!canManageAdminSettings}
                       onChange={(event) =>
                         setApiForm((current) => ({ ...current, defaultImageSize: event.target.value }))
                       }
@@ -1237,6 +1632,7 @@ export function AdminPage() {
                     Advanced Params (JSON)
                     <textarea
                       className="mt-1 min-h-36 w-full rounded-md border border-slate-300 bg-white px-3 py-2 font-mono text-base"
+                      disabled={!canManageAdminSettings}
                       onChange={(event) =>
                         setApiForm((current) => ({ ...current, defaultParams: event.target.value }))
                       }
@@ -1248,7 +1644,7 @@ export function AdminPage() {
                 <div className="flex flex-wrap items-center gap-2 border-t border-slate-300 px-5 py-4">
                   <button
                     className="rounded-md bg-[#2b66d5] px-5 py-2 text-lg font-semibold text-white transition hover:bg-[#2457b5] disabled:opacity-60"
-                    disabled={isSaving}
+                    disabled={isSaving || !canManageAdminSettings}
                     onClick={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
@@ -1260,7 +1656,7 @@ export function AdminPage() {
                   </button>
                   <button
                     className="rounded-md border border-slate-300 bg-white px-5 py-2 text-lg text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
-                    disabled={isTesting}
+                    disabled={isTesting || !canManageAdminSettings}
                     onClick={testConnection}
                     type="button"
                   >

@@ -50,6 +50,42 @@ export type AdminSettingsResponse = {
     lastSettingsUpdate: string;
     appVersion: string;
   };
+  access: {
+    role: TeamRole;
+    isAdmin: boolean;
+  };
+  developerDashboard: {
+    organizationId: string;
+    summary: {
+      totalUsers: number;
+      activeUsers30d: number;
+      employeeUsers: number;
+      inactiveUsers: number;
+    };
+    totals: {
+      workspaces: number;
+      workspaceCollaborators: number;
+      rooms: number;
+      assets: number;
+      assetVersions: number;
+      comments: number;
+    };
+    users: Array<{
+      userId: string;
+      email: string | null;
+      displayName: string | null;
+      createdAt: string | null;
+      lastSignInAt: string | null;
+      accountStatus: "active" | "idle" | "never";
+      ownedWorkspaceCount: number;
+      collaboratorWorkspaceCount: number;
+      totalWorkspaceCount: number;
+      lastWorkspaceActivityAt: string | null;
+      isEmployee: boolean;
+      employeeRole: TeamRole | null;
+      teamMemberId: string | null;
+    }>;
+  };
 };
 
 const MAX_AUTH_HEADER_TOKEN_LENGTH = 6000;

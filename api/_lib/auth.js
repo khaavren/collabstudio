@@ -102,6 +102,17 @@ async function loadMembershipsForUser(userId) {
   return Array.isArray(data) ? data : [];
 }
 
+async function hasAnyTeamMembers() {
+  const adminClient = getSupabaseAdminClient();
+  const { count, error } = await adminClient.from("team_members").select("id", { count: "exact", head: true });
+
+  if (error) {
+    throw new HttpError(error.message, 500);
+  }
+
+  return (count ?? 0) > 0;
+}
+
 async function loadOrganizationById(organizationId) {
   const adminClient = getSupabaseAdminClient();
   const { data, error } = await adminClient
@@ -179,21 +190,28 @@ export async function getPrimaryMembership(userId) {
   return choosePreferredMembership(memberships);
 }
 
-async function ensureOrganizationAndMembership(user) {
+async function resolveOrganizationMembership(user) {
   const adminClient = getSupabaseAdminClient();
   const memberships = await loadMembershipsForUser(user.id);
-  const preferredAdminMembership = memberships.find((entry) => entry.role === "admin") ?? null;
 
-  if (preferredAdminMembership) {
-    const organization = await loadOrganizationById(preferredAdminMembership.organization_id);
+  const preferredMembership = choosePreferredMembership(memberships);
+  if (preferredMembership) {
+    const organization = await loadOrganizationById(preferredMembership.organization_id);
     if (!organization) {
-      throw new HttpError("Organization not found for admin membership.", 500);
+      throw new HttpError("Organization not found for membership.", 500);
     }
 
     return {
       organization,
-      membership: preferredAdminMembership
+      membership: preferredMembership
     };
+  }
+
+  const hasConfiguredAdminEmails = parseAdminEmails().length > 0;
+  if (!isAdminEmail(user.email ?? null)) {
+    if (hasConfiguredAdminEmails || (await hasAnyTeamMembers())) {
+      throw new HttpError("Not authorized for admin access.", 403);
+    }
   }
 
   const organization = await createOrganizationForUser(user);
@@ -219,9 +237,19 @@ async function ensureOrganizationAndMembership(user) {
   };
 }
 
-export async function requireAdmin(req) {
+export async function requireOrganizationMember(req) {
   const user = await getAuthenticatedUser(req);
-  const { organization, membership } = await ensureOrganizationAndMembership(user);
+  const { organization, membership } = await resolveOrganizationMembership(user);
+
+  return {
+    user,
+    organization,
+    membership
+  };
+}
+
+export async function requireAdmin(req) {
+  const { user, organization, membership } = await requireOrganizationMember(req);
 
   if (membership.role !== "admin") {
     throw new HttpError("Admin role is required.", 403);
