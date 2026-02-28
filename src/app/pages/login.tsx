@@ -1,15 +1,24 @@
 import { FormEvent, useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/app/context/auth-context";
 import { SiteTopNav } from "@/components/SiteTopNav";
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { isAuthenticated, login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get("reset") === "success") {
+      setInfo("Password reset successful. You can sign in with your new password.");
+    }
+  }, [location.search]);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -41,6 +50,12 @@ export function LoginPage() {
           <p className="mt-1 text-sm text-[var(--muted-foreground)]">
             Continue to your MagisterLudi dashboard.
           </p>
+
+          {info ? (
+            <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+              {info}
+            </div>
+          ) : null}
 
           {error ? (
             <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">

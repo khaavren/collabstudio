@@ -2,6 +2,7 @@ import { RouterProvider, createBrowserRouter, type LoaderFunctionArgs } from "re
 import { HomePage } from "@/app/pages/home";
 import { LoginPage } from "@/app/pages/login";
 import { ForgotPasswordPage } from "@/app/pages/forgot-password";
+import { ResetPasswordPage } from "@/app/pages/reset-password";
 import { SignupPage } from "@/app/pages/signup";
 import { AdminPage } from "@/pages/AdminPage";
 import { ProfilePage } from "@/pages/ProfilePage";
@@ -37,6 +38,10 @@ const router = createBrowserRouter([
   {
     path: "/forgot-password",
     element: <ForgotPasswordPage />
+  },
+  {
+    path: "/reset-password",
+    element: <ResetPasswordPage />
   },
   {
     path: "/room/:roomId",
