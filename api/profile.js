@@ -235,6 +235,16 @@ async function handlePost(req, res) {
   });
 
   if (error) {
+    const message = String(error.message ?? "").toLowerCase();
+    const code = String(error.code ?? "");
+    const status = Number(error.status ?? 0);
+    const isRateLimited =
+      status === 429 || code === "over_email_send_rate_limit" || message.includes("rate limit");
+
+    if (isRateLimited) {
+      throw new HttpError("Too many reset attempts. Please wait 60 minutes and try once.", 429);
+    }
+
     throw new HttpError("Unable to send reset email at the moment.", 500);
   }
 
