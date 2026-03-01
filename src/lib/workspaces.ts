@@ -122,8 +122,9 @@ export async function updateWorkspaceById(
   workspaceId: string,
   next: { name: string; description: string }
 ) {
+  const cacheBust = Date.now();
   await requestJson(
-    `/api/workspaces/${workspaceId}`,
+    `/api/workspaces/${workspaceId}?v=${cacheBust}`,
     {
       method: "PATCH",
       body: JSON.stringify(next)
