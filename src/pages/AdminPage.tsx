@@ -343,13 +343,16 @@ export function AdminPage() {
     };
   }, []);
 
-  const loadSettings = useCallback(async () => {
+  const loadSettings = useCallback(async (options?: { showLoader?: boolean }) => {
+    const showLoader = options?.showLoader ?? true;
     if (!user) {
       setIsLoading(false);
       return;
     }
 
-    setIsLoading(true);
+    if (showLoader) {
+      setIsLoading(true);
+    }
     setError(null);
     try {
       const response = await fetchWithAuth("/api/admin/settings", {
@@ -427,7 +430,9 @@ export function AdminPage() {
       setIsUnauthorized(false);
       setError(caught instanceof Error ? caught.message : "Failed to load admin settings.");
     } finally {
-      setIsLoading(false);
+      if (showLoader) {
+        setIsLoading(false);
+      }
     }
   }, [user]);
 
@@ -540,7 +545,7 @@ export function AdminPage() {
       setIsEditingApiKey(false);
       setLogoFile(null);
       setMessage("Settings saved.");
-      await loadSettings();
+      await loadSettings({ showLoader: false });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to save settings.");
     } finally {
@@ -631,7 +636,7 @@ export function AdminPage() {
     setInviteEmail("");
     setInviteRole("viewer");
     setMessage(payload.message ?? "Invite sent.");
-    await loadSettings();
+    await loadSettings({ showLoader: false });
     setIsInviting(false);
   }
 
@@ -657,7 +662,7 @@ export function AdminPage() {
     }
 
     setMessage("Member updated.");
-    await loadSettings();
+    await loadSettings({ showLoader: false });
   }
 
   async function removeMember(memberId: string) {
@@ -674,7 +679,7 @@ export function AdminPage() {
     }
 
     setMessage("Member removed.");
-    await loadSettings();
+    await loadSettings({ showLoader: false });
   }
 
   async function grantEmployeeAccess(entry: DeveloperUserRow) {
@@ -705,7 +710,7 @@ export function AdminPage() {
       }
 
       setMessage(payload.message ?? "Employee access granted.");
-      await loadSettings();
+      await loadSettings({ showLoader: false });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to grant access.");
     } finally {
@@ -738,7 +743,7 @@ export function AdminPage() {
       }
 
       setMessage("Employee role updated.");
-      await loadSettings();
+      await loadSettings({ showLoader: false });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to update employee role.");
     } finally {
@@ -766,7 +771,7 @@ export function AdminPage() {
       }
 
       setMessage("Employee access revoked.");
-      await loadSettings();
+      await loadSettings({ showLoader: false });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to revoke access.");
     } finally {
@@ -858,7 +863,7 @@ export function AdminPage() {
       }
 
       setMessage(payload.message ?? (suspended ? "User suspended." : "User unsuspended."));
-      await loadSettings();
+      await loadSettings({ showLoader: false });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to update user suspension.");
     } finally {
@@ -900,7 +905,7 @@ export function AdminPage() {
       }
 
       setMessage(payload.message ?? "User deleted.");
-      await loadSettings();
+      await loadSettings({ showLoader: false });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to delete user.");
     } finally {
