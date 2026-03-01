@@ -73,6 +73,8 @@ function recommendedModelsForProvider(provider: string) {
   if (normalizedProvider === "OpenAI") {
     return [
       "gpt-image-1",
+      "gpt-5.3",
+      "gpt-5.3-mini",
       "gpt-5.2",
       "gpt-5.2-mini",
       "gpt-5",
@@ -124,6 +126,8 @@ function pickLatestCurrentModels(provider: string, models: string[]) {
 
   const openAiPreferred = [
     "gpt-image-1",
+    "gpt-5.3",
+    "gpt-5.3-mini",
     "gpt-5.2",
     "gpt-5.2-mini",
     "gpt-5",

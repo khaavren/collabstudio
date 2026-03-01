@@ -228,12 +228,20 @@ function createOpenAiHttpError(response, raw) {
       ? payload.error.message
       : compactErrorText(raw) || `OpenAI image generation failed (${response.status}).`;
   const type = typeof payload?.error?.type === "string" ? payload.error.type : "";
+  const code = typeof payload?.error?.code === "string" ? payload.error.code : "";
   const requestId =
     response.headers.get("x-request-id") ??
     response.headers.get("openai-request-id") ??
     response.headers.get("request-id") ??
     null;
   const retryable = response.status >= 500 || response.status === 429 || type === "server_error";
+  const detailLower = providerMessage.toLowerCase();
+  const modelInvalid =
+    code === "model_not_found" ||
+    (detailLower.includes("model") &&
+      (detailLower.includes("not found") ||
+        detailLower.includes("does not exist") ||
+        detailLower.includes("unsupported")));
 
   const detail = compactErrorText(providerMessage);
   const parts = [
@@ -243,6 +251,7 @@ function createOpenAiHttpError(response, raw) {
   ].filter(Boolean);
   const error = new Error(parts.join(" "));
   error.retryable = retryable;
+  error.modelInvalid = modelInvalid;
   return error;
 }
 
@@ -276,11 +285,34 @@ function resolveOpenAiImageModel(model) {
 function resolveOpenAiTextModel(model) {
   const raw = String(model ?? "").trim();
   const lowered = raw.toLowerCase();
-  if (!raw) return "gpt-4.1-mini";
+  if (!raw) return "gpt-5.3";
   if (lowered.includes("image") || lowered.startsWith("dall-e")) {
-    return "gpt-4.1-mini";
+    return "gpt-5.3";
   }
   return raw;
+}
+
+function resolveOpenAiTextModelCandidates(model) {
+  const preferred = resolveOpenAiTextModel(model);
+  const candidates = [
+    preferred,
+    "gpt-5.3",
+    "gpt-5.2",
+    "gpt-5",
+    "gpt-5-mini",
+    "gpt-4.1"
+  ].filter((entry) => typeof entry === "string" && entry.trim().length > 0);
+
+  const deduped = [];
+  const seen = new Set();
+  for (const candidate of candidates) {
+    const key = candidate.trim().toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(candidate.trim());
+  }
+
+  return deduped;
 }
 
 function sanitizeOpenAiImageParams(raw) {
@@ -325,6 +357,14 @@ function resolveOpenAiTextModelFromParams(model, defaultParams) {
       ? defaultParams.openaiText.model.trim()
       : "";
   return resolveOpenAiTextModel(configured || model);
+}
+
+function resolveOpenAiTextModelCandidatesFromParams(model, defaultParams) {
+  const configured =
+    isPlainObject(defaultParams?.openaiText) && typeof defaultParams.openaiText.model === "string"
+      ? defaultParams.openaiText.model.trim()
+      : "";
+  return resolveOpenAiTextModelCandidates(configured || model);
 }
 
 function isPlainObject(value) {
@@ -615,75 +655,85 @@ async function generateOpenAiImage(options) {
 async function generateOpenAiText(options) {
   const { apiKey, model, prompt, defaultParams } = options;
   const maxAttempts = 2;
-  const resolvedModel = resolveOpenAiTextModelFromParams(model, defaultParams);
+  const modelCandidates = resolveOpenAiTextModelCandidatesFromParams(model, defaultParams);
   const textParams = sanitizeOpenAiTextParams(defaultParams.openaiText);
 
-  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    const timeout = withTimeout(60000);
-    try {
-      const response = await fetch("https://api.openai.com/v1/responses", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          model: resolvedModel,
-          input: [
-            {
-              role: "system",
-              content:
-                "You are an industrial product development assistant. Return clear Markdown with this exact structure: " +
-                "## Recommendation, ## Why, ## Action Plan. " +
-                "Use bullet points and numbered steps on separate lines. " +
-                "Do not output one long paragraph. Keep it concise and practical."
-            },
-            {
-              role: "user",
-              content: prompt
-            }
-          ],
-          ...textParams
-        }),
-        signal: timeout.signal
-      });
+  for (let candidateIndex = 0; candidateIndex < modelCandidates.length; candidateIndex += 1) {
+    const resolvedModel = modelCandidates[candidateIndex];
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const timeout = withTimeout(60000);
+      try {
+        const response = await fetch("https://api.openai.com/v1/responses", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            model: resolvedModel,
+            input: [
+              {
+                role: "system",
+                content:
+                  "You are an industrial product development assistant. Return clear Markdown with this exact structure: " +
+                  "## Recommendation, ## Why, ## Action Plan. " +
+                  "Use bullet points and numbered steps on separate lines. " +
+                  "Do not output one long paragraph. Keep it concise and practical."
+              },
+              {
+                role: "user",
+                content: prompt
+              }
+            ],
+            ...textParams
+          }),
+          signal: timeout.signal
+        });
 
-      if (!response.ok) {
-        const raw = await response.text();
-        throw createOpenAiHttpError(response, raw);
-      }
-
-      const payload = await response.json();
-      const text = extractTextFromResponsePayload(payload);
-      if (!text) {
-        throw new Error("OpenAI returned no text response.");
-      }
-
-      return {
-        responseText: text,
-        modelUsed: resolvedModel
-      };
-    } catch (caughtError) {
-      const retryable =
-        (caughtError instanceof Error && caughtError.retryable === true) ||
-        isRetryableRuntimeError(caughtError);
-      const canRetry = retryable && attempt < maxAttempts - 1;
-
-      if (!canRetry) {
-        if (caughtError instanceof Error && caughtError.name === "AbortError") {
-          throw new Error("OpenAI text request timed out. Please retry.");
+        if (!response.ok) {
+          const raw = await response.text();
+          throw createOpenAiHttpError(response, raw);
         }
-        throw caughtError;
-      }
 
-      const backoffMs = Math.min(1000 * 2 ** attempt, 8000);
-      await sleep(backoffMs);
-    } finally {
-      timeout.clear();
+        const payload = await response.json();
+        const text = extractTextFromResponsePayload(payload);
+        if (!text) {
+          throw new Error("OpenAI returned no text response.");
+        }
+
+        return {
+          responseText: text,
+          modelUsed: resolvedModel
+        };
+      } catch (caughtError) {
+        const retryable =
+          (caughtError instanceof Error && caughtError.retryable === true) ||
+          isRetryableRuntimeError(caughtError);
+        const canRetry = retryable && attempt < maxAttempts - 1;
+        const canFallbackModel =
+          caughtError instanceof Error &&
+          caughtError.modelInvalid === true &&
+          candidateIndex < modelCandidates.length - 1;
+
+        if (!canRetry) {
+          if (canFallbackModel) {
+            break;
+          }
+          if (caughtError instanceof Error && caughtError.name === "AbortError") {
+            throw new Error("OpenAI text request timed out. Please retry.");
+          }
+          throw caughtError;
+        }
+
+        const backoffMs = Math.min(1000 * 2 ** attempt, 8000);
+        await sleep(backoffMs);
+      } finally {
+        timeout.clear();
+      }
     }
   }
 
-  throw new Error("OpenAI text response failed after retries.");
+  throw new Error("OpenAI text response failed. No compatible text model was available.");
 }
 
 async function classifyOpenAiOutputMode(options) {
