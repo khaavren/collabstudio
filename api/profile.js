@@ -43,6 +43,12 @@ function parsePassword(value) {
   return password;
 }
 
+function parseBoolean(value) {
+  if (value === true) return true;
+  if (value === false) return false;
+  return null;
+}
+
 function getRequestOrigin(req) {
   const host = String(req.headers["x-forwarded-host"] ?? req.headers.host ?? "").trim();
   if (!host) return null;
@@ -220,36 +226,100 @@ async function handlePatch(req, res) {
 async function handlePost(req, res) {
   const body = (await getJsonBody(req)) ?? {};
   const action = String(body.action ?? "").trim();
-  if (action !== "request-password-reset" && action !== "admin-set-password") {
+  if (
+    action !== "request-password-reset" &&
+    action !== "admin-set-password" &&
+    action !== "admin-suspend-user" &&
+    action !== "admin-delete-user"
+  ) {
     sendJson(res, 400, { error: "Invalid action." });
     return;
   }
 
-  if (action === "admin-set-password") {
+  if (action === "admin-set-password" || action === "admin-suspend-user" || action === "admin-delete-user") {
+    const { user: actingUser } = await requireAdmin(req);
+    const adminClient = getSupabaseAdminClient();
     const userId = String(body.userId ?? "").trim();
-    const newPassword = parsePassword(body.newPassword);
 
     if (!userId) {
       sendJson(res, 400, { error: "User ID is required." });
       return;
     }
 
-    if (!newPassword) {
-      sendJson(res, 400, { error: "Password must be 8-256 characters." });
+    if (userId === actingUser.id) {
+      sendJson(res, 400, { error: "You cannot apply this action to your own account." });
       return;
     }
 
-    await requireAdmin(req);
-    const adminClient = getSupabaseAdminClient();
-    const { error } = await adminClient.auth.admin.updateUserById(userId, {
-      password: newPassword
-    });
+    if (action === "admin-set-password") {
+      const newPassword = parsePassword(body.newPassword);
+      if (!newPassword) {
+        sendJson(res, 400, { error: "Password must be 8-256 characters." });
+        return;
+      }
 
-    if (error) {
-      throw new HttpError("Unable to update user password.", 500);
+      const { error } = await adminClient.auth.admin.updateUserById(userId, {
+        password: newPassword
+      });
+
+      if (error) {
+        throw new HttpError("Unable to update user password.", 500);
+      }
+
+      sendJson(res, 200, { ok: true, message: "Password updated." });
+      return;
     }
 
-    sendJson(res, 200, { ok: true, message: "Password updated." });
+    if (action === "admin-suspend-user") {
+      const suspended = parseBoolean(body.suspended);
+      if (suspended === null) {
+        sendJson(res, 400, { error: "Suspended flag must be true or false." });
+        return;
+      }
+
+      const { error } = await adminClient.auth.admin.updateUserById(userId, {
+        ban_duration: suspended ? "876000h" : "none"
+      });
+
+      if (error) {
+        throw new HttpError("Unable to update user suspension.", 500);
+      }
+
+      sendJson(res, 200, {
+        ok: true,
+        message: suspended ? "User suspended." : "User unsuspended."
+      });
+      return;
+    }
+
+    // admin-delete-user
+    const { error: deleteError } = await adminClient.auth.admin.deleteUser(userId, true);
+    if (deleteError && Number(deleteError.status ?? 0) !== 404) {
+      throw new HttpError("Unable to delete user.", 500);
+    }
+
+    const { error: membershipCleanupError } = await adminClient
+      .from("team_members")
+      .delete()
+      .eq("user_id", userId);
+
+    if (membershipCleanupError) {
+      throw new HttpError("User deleted, but team membership cleanup failed.", 500);
+    }
+
+    const { error: collaboratorCleanupError } = await adminClient
+      .from("workspace_collaborators")
+      .update({ user_id: null })
+      .eq("user_id", userId);
+
+    if (collaboratorCleanupError) {
+      throw new HttpError("User deleted, but collaborator cleanup failed.", 500);
+    }
+
+    sendJson(res, 200, {
+      ok: true,
+      message: "User deleted."
+    });
     return;
   }
 

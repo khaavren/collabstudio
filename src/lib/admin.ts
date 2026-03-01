@@ -61,6 +61,7 @@ export type AdminSettingsResponse = {
       activeUsers30d: number;
       employeeUsers: number;
       inactiveUsers: number;
+      suspendedUsers: number;
     };
     totals: {
       workspaces: number;
@@ -77,6 +78,8 @@ export type AdminSettingsResponse = {
       createdAt: string | null;
       lastSignInAt: string | null;
       accountStatus: "active" | "idle" | "never";
+      isSuspended: boolean;
+      suspendedUntil: string | null;
       ownedWorkspaceCount: number;
       collaboratorWorkspaceCount: number;
       totalWorkspaceCount: number;

@@ -818,6 +818,96 @@ export function AdminPage() {
     }
   }
 
+  async function setDeveloperSuspended(entry: DeveloperUserRow, suspended: boolean) {
+    if (!ensureAdminAccess()) return;
+    if (entry.userId === user?.id) {
+      setError("You cannot suspend your own account.");
+      return;
+    }
+
+    const targetLabel = entry.email ?? entry.displayName ?? entry.userId;
+    const confirmed = window.confirm(
+      suspended
+        ? `Suspend ${targetLabel}? They will be blocked from signing in until unsuspended.`
+        : `Unsuspend ${targetLabel}? They will be able to sign in again.`
+    );
+    if (!confirmed) return;
+
+    setUserActionInFlight(entry.userId);
+    setError(null);
+    setMessage(null);
+
+    try {
+      const response = await fetchWithAuth("/api/profile", {
+        method: "POST",
+        body: JSON.stringify({
+          action: "admin-suspend-user",
+          userId: entry.userId,
+          suspended
+        })
+      });
+
+      const payload = await safeJson<{ message?: string; error?: string }>(
+        response,
+        "Unable to update user suspension."
+      );
+
+      if (!response.ok) {
+        setError(payload.error ?? "Unable to update user suspension.");
+        return;
+      }
+
+      setMessage(payload.message ?? (suspended ? "User suspended." : "User unsuspended."));
+      await loadSettings();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to update user suspension.");
+    } finally {
+      setUserActionInFlight(null);
+    }
+  }
+
+  async function deleteDeveloperUser(entry: DeveloperUserRow) {
+    if (!ensureAdminAccess()) return;
+    if (entry.userId === user?.id) {
+      setError("You cannot delete your own account.");
+      return;
+    }
+
+    const targetLabel = entry.email ?? entry.displayName ?? entry.userId;
+    const confirmed = window.confirm(
+      `Delete ${targetLabel}? This permanently removes the auth account and cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    setUserActionInFlight(entry.userId);
+    setError(null);
+    setMessage(null);
+
+    try {
+      const response = await fetchWithAuth("/api/profile", {
+        method: "POST",
+        body: JSON.stringify({
+          action: "admin-delete-user",
+          userId: entry.userId
+        })
+      });
+
+      const payload = await safeJson<{ message?: string; error?: string }>(response, "Unable to delete user.");
+
+      if (!response.ok) {
+        setError(payload.error ?? "Unable to delete user.");
+        return;
+      }
+
+      setMessage(payload.message ?? "User deleted.");
+      await loadSettings();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to delete user.");
+    } finally {
+      setUserActionInFlight(null);
+    }
+  }
+
   async function testConnection() {
     if (!ensureAdminAccess()) return;
     setIsTesting(true);
@@ -1352,7 +1442,7 @@ export function AdminPage() {
                   </p>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
                   <div className="rounded-md border border-slate-300 bg-white p-4">
                     <p className="text-sm uppercase tracking-wide text-slate-500">Total Users</p>
                     <p className="mt-2 text-2xl font-semibold text-slate-800">
@@ -1375,6 +1465,12 @@ export function AdminPage() {
                     <p className="text-sm uppercase tracking-wide text-slate-500">Inactive Users</p>
                     <p className="mt-2 text-2xl font-semibold text-slate-800">
                       {settings.developerDashboard.summary.inactiveUsers}
+                    </p>
+                  </div>
+                  <div className="rounded-md border border-slate-300 bg-white p-4">
+                    <p className="text-sm uppercase tracking-wide text-slate-500">Suspended Users</p>
+                    <p className="mt-2 text-2xl font-semibold text-slate-800">
+                      {settings.developerDashboard.summary.suspendedUsers}
                     </p>
                   </div>
                 </div>
@@ -1483,6 +1579,16 @@ export function AdminPage() {
                                 <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${accountStatusClass}`}>
                                   {entry.accountStatus === "never" ? "Never signed in" : entry.accountStatus}
                                 </span>
+                                {entry.isSuspended ? (
+                                  <>
+                                    <span className="ml-2 inline-flex rounded-full bg-rose-100 px-2 py-0.5 text-xs font-semibold text-rose-700">
+                                      Suspended
+                                    </span>
+                                    <p className="text-xs text-rose-700">
+                                      Until: {formatDateTime(entry.suspendedUntil)}
+                                    </p>
+                                  </>
+                                ) : null}
                               </td>
                               <td className="space-y-1 px-4 py-3 text-sm text-slate-700">
                                 <p>Owned: {entry.ownedWorkspaceCount}</p>
@@ -1554,13 +1660,33 @@ export function AdminPage() {
                                 )}
                                 <button
                                   className="text-[#2b66d5] hover:underline disabled:opacity-60"
-                                  disabled={isBusy || !canManageAdminSettings}
+                                  disabled={isBusy || isSelf || !canManageAdminSettings}
                                   onClick={() => {
                                     void setDeveloperPassword(entry);
                                   }}
                                   type="button"
                                 >
                                   Set password
+                                </button>
+                                <button
+                                  className="text-[#2b66d5] hover:underline disabled:opacity-60"
+                                  disabled={isBusy || isSelf || !canManageAdminSettings}
+                                  onClick={() => {
+                                    void setDeveloperSuspended(entry, !entry.isSuspended);
+                                  }}
+                                  type="button"
+                                >
+                                  {entry.isSuspended ? "Unsuspend" : "Suspend"}
+                                </button>
+                                <button
+                                  className="text-red-600 hover:underline disabled:opacity-60"
+                                  disabled={isBusy || isSelf || !canManageAdminSettings}
+                                  onClick={() => {
+                                    void deleteDeveloperUser(entry);
+                                  }}
+                                  type="button"
+                                >
+                                  Delete
                                 </button>
                               </td>
                             </tr>

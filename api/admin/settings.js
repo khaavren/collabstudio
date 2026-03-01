@@ -58,6 +58,12 @@ function isWithinDays(value, days) {
   return Date.now() - timestamp <= windowMs;
 }
 
+function isFutureDate(value) {
+  const timestamp = parseDateToEpoch(value);
+  if (timestamp === null) return false;
+  return timestamp > Date.now();
+}
+
 function compareDateDescending(left, right) {
   const leftEpoch = parseDateToEpoch(left);
   const rightEpoch = parseDateToEpoch(right);
@@ -248,6 +254,8 @@ function buildDeveloperUsers(authUsers, teamMembers, workspaces, collaborators) 
     const ownedWorkspaceCount = ownedWorkspaceCounts.get(user.id) ?? 0;
     const collaboratorWorkspaceCount = (collaboratorWorkspaceSets.get(user.id) ?? new Set()).size;
     const lastSignInAt = toNonEmptyStringOrNull(user.last_sign_in_at);
+    const suspendedUntil = toNonEmptyStringOrNull(user.banned_until);
+    const isSuspended = isFutureDate(suspendedUntil);
     const createdAt = toNonEmptyStringOrNull(user.created_at);
     const lastWorkspaceActivityAt = lastOwnedWorkspaceActivity.get(user.id) ?? null;
     const accountStatus = lastSignInAt
@@ -263,6 +271,8 @@ function buildDeveloperUsers(authUsers, teamMembers, workspaces, collaborators) 
       createdAt,
       lastSignInAt,
       accountStatus,
+      isSuspended,
+      suspendedUntil,
       ownedWorkspaceCount,
       collaboratorWorkspaceCount,
       totalWorkspaceCount: ownedWorkspaceCount + collaboratorWorkspaceCount,
@@ -314,7 +324,8 @@ async function buildDeveloperDashboardPayload(organizationId, teamMembers, authU
       totalUsers: users.length,
       activeUsers30d: users.filter((entry) => entry.accountStatus === "active").length,
       employeeUsers: users.filter((entry) => entry.isEmployee).length,
-      inactiveUsers: users.filter((entry) => entry.accountStatus !== "active").length
+      inactiveUsers: users.filter((entry) => entry.accountStatus !== "active").length,
+      suspendedUsers: users.filter((entry) => entry.isSuspended).length
     },
     totals: {
       workspaces: workspaces.length,
