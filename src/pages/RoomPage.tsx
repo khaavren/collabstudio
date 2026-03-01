@@ -441,6 +441,7 @@ export function RoomPage() {
         roomId: targetRoom.id,
         title,
         prompt: input.prompt,
+        model: input.model,
         size: input.size,
         style: input.style,
         notes: input.notes,
@@ -475,7 +476,7 @@ export function RoomPage() {
     }
   }
 
-  async function handleSendPrompt(prompt: string, referenceFile: File | null) {
+  async function handleSendPrompt(prompt: string, referenceFile: File | null, model: string | null) {
     if (!selectedAsset) return;
 
     const baseVersion =
@@ -501,6 +502,7 @@ export function RoomPage() {
       await handleGenerate({
         title: selectedAsset.title,
         prompt,
+        model,
         style: baseVersion?.style ?? "Product Photography",
         size: baseVersion?.size ?? "1024x1024",
         notes: "",

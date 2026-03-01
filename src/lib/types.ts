@@ -70,6 +70,7 @@ export type GenerateInput = {
   style: string;
   size: string;
   notes: string;
+  model?: string | null;
   referenceFile: File | null;
   sourceImageUrl?: string | null;
   generationMode?: "force_image" | "image" | "auto";

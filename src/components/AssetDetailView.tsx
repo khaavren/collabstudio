@@ -35,9 +35,20 @@ type AssetDetailViewProps = {
   onDeleteVersion: (version: AssetVersion) => void;
   onRegenerate: (version: AssetVersion) => void;
   onSelectVersion: (versionId: string) => void;
-  onSendPrompt: (prompt: string, referenceFile: File | null) => Promise<void>;
+  onSendPrompt: (prompt: string, referenceFile: File | null, model: string | null) => Promise<void>;
   versions: AssetVersion[];
 };
+
+const CONVERSATION_MODEL_OPTIONS = [
+  { value: "", label: "Studio default" },
+  { value: "gpt-5.3", label: "GPT-5.3" },
+  { value: "gpt-5.2", label: "GPT-5.2" },
+  { value: "gpt-5", label: "GPT-5" },
+  { value: "gpt-5-mini", label: "GPT-5 mini" },
+  { value: "gpt-4.1", label: "GPT-4.1" },
+  { value: "gpt-4.1-mini", label: "GPT-4.1 mini" },
+  { value: "gpt-image-1", label: "GPT-Image-1" }
+] as const;
 
 type ConversationMessage =
   | {
@@ -280,6 +291,8 @@ function GenerationMessage({
 
 function PromptInputBar({
   isSending,
+  model,
+  onModelChange,
   onSend,
   onReferenceFileChange,
   value,
@@ -287,6 +300,8 @@ function PromptInputBar({
   referenceFile
 }: {
   isSending: boolean;
+  model: string;
+  onModelChange: (value: string) => void;
   onSend: () => void;
   onReferenceFileChange: (file: File | null) => void;
   value: string;
@@ -323,6 +338,24 @@ function PromptInputBar({
     <div className="shrink-0 border-t border-[var(--border)] bg-[var(--card)] p-4">
       <div className="mx-auto flex max-w-4xl items-end gap-3">
         <div className="relative flex-1">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <label className="flex items-center gap-2 text-xs text-[var(--muted-foreground)]">
+              <span>Model</span>
+              <select
+                className="rounded-md border border-[var(--border)] bg-[var(--card)] px-2 py-1 text-xs text-[var(--foreground)]"
+                disabled={isSending}
+                onChange={(event) => onModelChange(event.target.value)}
+                value={model}
+              >
+                {CONVERSATION_MODEL_OPTIONS.map((option) => (
+                  <option key={option.value || "default"} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
           {referenceFile && referencePreviewUrl ? (
             <div className="mb-2 flex items-center gap-3 rounded-lg border border-[var(--border)] bg-[var(--accent)] px-2 py-2">
               <img
@@ -463,6 +496,7 @@ export function AssetDetailView({
 }: AssetDetailViewProps) {
   const [promptInput, setPromptInput] = useState("");
   const [promptReferenceFile, setPromptReferenceFile] = useState<File | null>(null);
+  const [promptModel, setPromptModel] = useState("");
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isSendingPrompt, setIsSendingPrompt] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -535,13 +569,24 @@ export function AssetDetailView({
     previousMessageCountRef.current = nextCount;
   }, [conversationThread.length]);
 
+  useEffect(() => {
+    const stored = window.localStorage.getItem("conversation_model");
+    if (stored !== null) {
+      setPromptModel(stored);
+    }
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem("conversation_model", promptModel);
+  }, [promptModel]);
+
   async function handleSendPrompt() {
     const trimmed = promptInput.trim();
     if (!trimmed || isSendingPrompt) return;
 
     setIsSendingPrompt(true);
     try {
-      await onSendPrompt(trimmed, promptReferenceFile);
+      await onSendPrompt(trimmed, promptReferenceFile, promptModel || null);
       setPromptInput("");
       setPromptReferenceFile(null);
     } finally {
@@ -656,7 +701,9 @@ export function AssetDetailView({
 
           <PromptInputBar
             isSending={isSendingPrompt}
+            model={promptModel}
             onChange={setPromptInput}
+            onModelChange={setPromptModel}
             onReferenceFileChange={setPromptReferenceFile}
             onSend={handleSendPrompt}
             referenceFile={promptReferenceFile}

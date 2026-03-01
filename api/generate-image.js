@@ -24,6 +24,15 @@ function normalizedSourceImageUrl(value) {
   return null;
 }
 
+function normalizedModel(value) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (trimmed.length > 120) return null;
+  if (!/^[a-zA-Z0-9._:/-]+$/.test(trimmed)) return null;
+  return trimmed;
+}
+
 function resolveRequestedMode(value) {
   if (value === "auto" || value === "image" || value === "text" || value === "force_image") {
     return value;
@@ -1127,6 +1136,7 @@ export default async function handler(req, res) {
     const body = (await getJsonBody(req)) ?? {};
     const prompt = String(body.prompt ?? "").trim();
     const size = normalizedSize(body.size);
+    const requestedModel = normalizedModel(body.model);
     const sourceImageUrl = normalizedSourceImageUrl(body.sourceImageUrl);
     const requestedMode = resolveRequestedMode(body.mode);
     const contextMessages = normalizeContextMessages(body.context);
@@ -1155,7 +1165,7 @@ export default async function handler(req, res) {
       if (apiSetting?.provider && apiSetting?.encrypted_api_key && apiSetting.encrypted_api_key.length > 0) {
         configured = true;
         providerUsed = normalizeProvider(apiSetting.provider);
-        modelUsed = apiSetting.model || defaultModelForProvider(providerUsed) || "default";
+        modelUsed = requestedModel || apiSetting.model || defaultModelForProvider(providerUsed) || "default";
 
         try {
           const key = decryptSecret(apiSetting.encrypted_api_key);

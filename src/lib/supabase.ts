@@ -274,7 +274,8 @@ async function requestGeneratedOutput(
   size: string,
   sourceImageUrl?: string | null,
   generationMode: "force_image" | "image" | "auto" = "auto",
-  conversationContext?: Array<{ role: "user" | "assistant"; content: string }>
+  conversationContext?: Array<{ role: "user" | "assistant"; content: string }>,
+  model?: string | null
 ) {
   const fallback = placeholderUrl(prompt, size);
   const {
@@ -293,6 +294,7 @@ async function requestGeneratedOutput(
       body: JSON.stringify({
         prompt,
         size,
+        model,
         sourceImageUrl,
         mode: generationMode,
         context: conversationContext ?? []
@@ -406,7 +408,8 @@ async function uploadImageToStorage(
   file?: File | null,
   sourceImageUrl?: string | null,
   generationMode: "force_image" | "image" | "auto" = "auto",
-  conversationContext?: Array<{ role: "user" | "assistant"; content: string }>
+  conversationContext?: Array<{ role: "user" | "assistant"; content: string }>,
+  model?: string | null
 ): Promise<GeneratedOutput> {
   const uploadedReferenceUrl = file ? await uploadBlobToStorage(file, "references") : null;
   const resolvedSourceImageUrl = uploadedReferenceUrl ?? sourceImageUrl;
@@ -417,7 +420,8 @@ async function uploadImageToStorage(
         size,
         resolvedSourceImageUrl,
         generationMode,
-        conversationContext
+        conversationContext,
+        model
       );
 
   const generatedResult =
@@ -427,7 +431,8 @@ async function uploadImageToStorage(
       size,
       resolvedSourceImageUrl,
       generationMode,
-      conversationContext
+      conversationContext,
+      model
     ));
 
   if (generatedResult.outputType === "text") {
@@ -506,6 +511,7 @@ export async function generateAssetVersion(options: {
   roomId: string;
   title: string;
   prompt: string;
+  model?: string | null;
   size: string;
   style: string;
   notes: string;
@@ -519,6 +525,7 @@ export async function generateAssetVersion(options: {
     editor,
     notes,
     prompt,
+    model,
     referenceFile,
     sourceImageUrl,
     generationMode = "auto",
@@ -537,7 +544,8 @@ export async function generateAssetVersion(options: {
     referenceFile,
     sourceImageUrl,
     generationMode,
-    conversationContext
+    conversationContext,
+    model
   );
   const imageUrl = generatedOutput.outputType === "image" ? generatedOutput.imageUrl : null;
   const responseText = generatedOutput.responseText ?? null;
