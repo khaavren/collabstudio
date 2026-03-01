@@ -27,6 +27,7 @@ export function GenerateModal({
 }: GenerateModalProps) {
   const [form, setForm] = useState<GenerateInput>(defaultValues);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const imageModeEnabled = form.generationMode === "force_image";
 
   useEffect(() => {
@@ -42,11 +43,19 @@ export function GenerateModal({
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!form.prompt.trim()) return;
+    const resolvedPrompt = form.prompt.trim() || form.title.trim();
+    if (!resolvedPrompt) {
+      setSubmitError("Enter a prompt or project title.");
+      return;
+    }
 
+    setSubmitError(null);
     setIsSubmitting(true);
     try {
-      await onGenerate(form);
+      await onGenerate({
+        ...form,
+        prompt: resolvedPrompt
+      });
       onClose();
     } catch {
       // Parent handles displaying error state.
@@ -90,6 +99,10 @@ export function GenerateModal({
             value={form.prompt}
           />
         </label>
+
+          {submitError ? (
+            <p className="text-sm text-red-600">{submitError}</p>
+          ) : null}
 
           <label className="block text-sm text-[var(--foreground)]">
             Response Mode
@@ -145,7 +158,7 @@ export function GenerateModal({
             </button>
             <button
               className="rounded-lg bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
-              disabled={isSubmitting}
+              disabled={isSubmitting || (!form.prompt.trim() && !form.title.trim())}
               type="submit"
             >
               {isSubmitting ? "Sending..." : imageModeEnabled ? "Generate" : "Start"}

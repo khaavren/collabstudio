@@ -405,9 +405,27 @@ export function RoomPage() {
   }
 
   async function handleGenerate(input: GenerateInput) {
-    if (!activeRoom) return;
-
     try {
+      let targetRoom = activeRoom;
+      if (!targetRoom) {
+        if (rooms.length > 0) {
+          targetRoom = rooms[0];
+        } else {
+          const defaultRoom = await createRoom("General", "general", activeWorkspaceId);
+          setRooms((current) => [...current, defaultRoom]);
+          targetRoom = defaultRoom;
+        }
+
+        const nextPath = activeWorkspaceId
+          ? `/workspace/${activeWorkspaceId}/room/${targetRoom.slug}`
+          : `/room/${targetRoom.slug}`;
+        navigate(nextPath, { replace: true });
+      }
+
+      if (!targetRoom) {
+        throw new Error("Unable to resolve a room for generation.");
+      }
+
       const activeAsset = assets.find((asset) => asset.id === selectedAssetId);
       const sourceVersion =
         versions.find((version) => version.id === activeVersionId) ??
@@ -420,7 +438,7 @@ export function RoomPage() {
 
       const assetId = await generateAssetVersion({
         activeAsset,
-        roomId: activeRoom.id,
+        roomId: targetRoom.id,
         title,
         prompt: input.prompt,
         size: input.size,
@@ -433,8 +451,10 @@ export function RoomPage() {
       });
 
       setSelectedAssetId(assetId);
-      await loadAssetsData();
-      await loadInspectorData(assetId);
+      if (activeRoom && targetRoom.id === activeRoom.id) {
+        await loadAssetsData();
+        await loadInspectorData(assetId);
+      }
       setGeneratePreset(defaultGenerate);
       setError(null);
     } catch (caughtError) {
