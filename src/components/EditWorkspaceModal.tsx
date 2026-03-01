@@ -7,7 +7,7 @@ type EditWorkspaceModalProps = {
   workspaceDescription: string;
   onClose: () => void;
   onDelete: () => void;
-  onSave: (next: { name: string; description: string }) => void;
+  onSave: (next: { name: string; description: string }) => Promise<boolean>;
 };
 
 export function EditWorkspaceModal({
@@ -21,6 +21,7 @@ export function EditWorkspaceModal({
   const inputRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState(workspaceName);
   const [description, setDescription] = useState(workspaceDescription);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     setName(workspaceName);
@@ -32,16 +33,23 @@ export function EditWorkspaceModal({
     inputRef.current?.focus();
   }, [isOpen]);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmedName = name.trim();
-    if (!trimmedName) return;
+    if (!trimmedName || isSaving) return;
 
-    onSave({
-      name: trimmedName,
-      description: description.trim()
-    });
-    onClose();
+    setIsSaving(true);
+    try {
+      const saved = await onSave({
+        name: trimmedName,
+        description: description.trim()
+      });
+      if (saved) {
+        onClose();
+      }
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   if (!isOpen) return null;
@@ -85,6 +93,7 @@ export function EditWorkspaceModal({
           <div className="flex justify-end gap-2 pt-2">
             <button
               className="mr-auto rounded-lg px-3 py-2 text-sm text-[#b42318] transition hover:bg-[#fef3f2]"
+              disabled={isSaving}
               onClick={onDelete}
               type="button"
             >
@@ -92,16 +101,18 @@ export function EditWorkspaceModal({
             </button>
             <button
               className="rounded-lg px-3 py-2 text-sm text-[var(--muted-foreground)] transition hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
+              disabled={isSaving}
               onClick={onClose}
               type="button"
             >
               Cancel
             </button>
             <button
-              className="rounded-lg bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
+              className="rounded-lg bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-60"
+              disabled={isSaving}
               type="submit"
             >
-              Save
+              {isSaving ? "Saving..." : "Save"}
             </button>
           </div>
         </form>

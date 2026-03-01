@@ -181,38 +181,52 @@ export function Dashboard() {
     };
   }, []);
 
-  function handleSaveWorkspace(next: { name: string; description: string }) {
-    if (!editingWorkspace) return;
+  async function handleSaveWorkspace(next: { name: string; description: string }) {
+    if (!editingWorkspace) return false;
+    const workspace = editingWorkspace;
 
-    void (async () => {
-      try {
-        if (pendingWorkspaceId === editingWorkspace.id) {
-          if (!user?.id || !user?.email) {
-            throw new Error("Sign in with an email account to create a workspace.");
-          }
-          await createWorkspaceForUser({
-            ownerId: user.id,
-            ownerName: currentUserName,
-            ownerEmail: user.email,
-            name: next.name,
-            description: next.description,
-            color: "var(--primary)"
-          });
-          setPendingWorkspaceId(null);
-        } else {
-          await updateWorkspaceById(editingWorkspace.id, next);
+    try {
+      if (pendingWorkspaceId === workspace.id) {
+        if (!user?.id || !user?.email) {
+          throw new Error("Sign in with an email account to create a workspace.");
         }
+        await createWorkspaceForUser({
+          ownerId: user.id,
+          ownerName: currentUserName,
+          ownerEmail: user.email,
+          name: next.name,
+          description: next.description,
+          color: "var(--primary)"
+        });
+        setPendingWorkspaceId(null);
 
         const data = await fetchWorkspacesForUser({
           userId: user?.id ?? "",
           email: user?.email ?? null
         });
         setWorkspaces(data);
-        setError(null);
-      } catch (caught) {
-        setError(caught instanceof Error ? caught.message : "Unable to save workspace.");
+      } else {
+        await updateWorkspaceById(workspace.id, next);
+        setWorkspaces((current) =>
+          current.map((entry) =>
+            entry.id === workspace.id
+              ? {
+                  ...entry,
+                  name: next.name,
+                  description: next.description,
+                  lastAccessed: "Just now"
+                }
+              : entry
+          )
+        );
       }
-    })();
+
+      setError(null);
+      return true;
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to save workspace.");
+      return false;
+    }
   }
 
   function handleDeleteWorkspace() {
