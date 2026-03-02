@@ -2,19 +2,19 @@
   "routes": [
     {
       "src": "/api/workspaces/collaborators/([^/]+)",
-      "dest": "/api/workspaces/collaborators/[collaboratorId].js"
+      "dest": "/api/workspaces/collaborators/[collaboratorId].js?collaboratorId=$1"
     },
     {
       "src": "/api/workspaces/([^/]+)/collaborators",
-      "dest": "/api/workspaces/[workspaceId]/collaborators.js"
+      "dest": "/api/workspaces/[workspaceId]/collaborators.js?workspaceId=$1"
     },
     {
       "src": "/api/workspaces/([^/]+)",
-      "dest": "/api/workspaces/[workspaceId].js"
+      "dest": "/api/workspaces/[workspaceId].js?workspaceId=$1"
     },
     {
       "src": "/api/admin/team/([^/]+)",
-      "dest": "/api/admin/team/[memberId].js"
+      "dest": "/api/admin/team/[memberId].js?memberId=$1"
     },
     {
       "handle": "filesystem"
