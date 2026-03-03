@@ -73,7 +73,6 @@ function parseAdminTab(value: string | null): AdminTab {
   if (value === "organization") return "organization";
   if (value === "account") return "account";
   if (value === "developer") return "developer";
-  if (value === "model") return "model";
   if (value === "usage") return "usage";
   if (value === "security") return "security";
   return "organization";
@@ -1086,7 +1085,6 @@ export function AdminPage() {
     { id: "organization", label: "Organization Profile" },
     { id: "account", label: "Account & Team" },
     { id: "developer", label: "Developer Users & Usage" },
-    { id: "model", label: "Model API Configuration" },
     { id: "usage", label: "Usage & Limits" },
     { id: "security", label: "Security & Environment" }
   ];
@@ -1130,13 +1128,7 @@ export function AdminPage() {
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="border-b border-slate-300/60 bg-white px-8 py-5">
             <h1 className="text-4xl font-semibold text-[#243042]">Admin Dashboard</h1>
-            <p className="mt-1 text-sm text-slate-500">
-              Studio administration only. Personal account details are managed in{" "}
-              <Link className="font-medium text-slate-700 underline" to="/settings/profile">
-                Settings
-              </Link>
-              .
-            </p>
+            <p className="mt-1 text-sm text-slate-500">Studio administration only.</p>
           </header>
 
           <nav className="border-b border-slate-300/60 bg-[#f5f7fb] px-8">
