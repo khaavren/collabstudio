@@ -7,7 +7,7 @@ import {
   LogOut,
   Upload
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import type { User } from "@supabase/supabase-js";
 import { fetchWithAuth, type AdminSettingsResponse, type TeamRole } from "@/lib/admin";
 import { supabase } from "@/lib/supabase";
@@ -66,6 +66,16 @@ type AdminTab = "organization" | "account" | "developer" | "model" | "usage" | "
 type DeveloperUserRow = AdminSettingsResponse["developerDashboard"]["users"][number];
 type DeveloperRoleFilter = "all" | TeamRole | "none";
 const WORKSPACE_PATH = "/";
+
+function parseAdminTab(value: string | null): AdminTab {
+  if (value === "organization") return "organization";
+  if (value === "account") return "account";
+  if (value === "developer") return "developer";
+  if (value === "model") return "model";
+  if (value === "usage") return "usage";
+  if (value === "security") return "security";
+  return "organization";
+}
 
 function recommendedModelsForProvider(provider: string) {
   const normalizedProvider = normalizeProviderValue(provider);
@@ -287,6 +297,7 @@ async function uploadLogo(file: File, organizationId: string) {
 }
 
 export function AdminPage() {
+  const location = useLocation();
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
@@ -312,7 +323,9 @@ export function AdminPage() {
   const [adminEmail, setAdminEmail] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
   const [isSigningIn, setIsSigningIn] = useState(false);
-  const [activeTab, setActiveTab] = useState<AdminTab>("organization");
+  const [activeTab, setActiveTab] = useState<AdminTab>(() =>
+    parseAdminTab(new URLSearchParams(location.search).get("tab"))
+  );
   const [developerSearch, setDeveloperSearch] = useState("");
   const [developerRoleFilter, setDeveloperRoleFilter] = useState<DeveloperRoleFilter>("all");
   const [developerRoleDrafts, setDeveloperRoleDrafts] = useState<Record<string, TeamRole>>({});
@@ -445,6 +458,11 @@ export function AdminPage() {
       void loadSettings();
     }
   }, [authLoading, loadSettings]);
+
+  useEffect(() => {
+    const nextTab = parseAdminTab(new URLSearchParams(location.search).get("tab"));
+    setActiveTab(nextTab);
+  }, [location.search]);
 
   const logoPreview = useMemo(() => {
     if (!logoFile) return null;

@@ -13,10 +13,11 @@ import {
   Users
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/app/context/auth-context";
 import { InviteCollaboratorsModal } from "../components/invite-collaborators-modal";
 import { EditWorkspaceModal } from "@/components/EditWorkspaceModal";
+import { fetchWithAuth } from "@/lib/admin";
 import {
   createWorkspaceForUser,
   deleteWorkspaceById,
@@ -48,6 +49,7 @@ function activityIcon(type: Activity["type"]) {
 
 export function Dashboard() {
   const { logout, user } = useAuth();
+  const navigate = useNavigate();
   const menuRef = useRef<HTMLDivElement>(null);
   const [workspaces, setWorkspaces] = useState<WorkspaceRecord[]>([]);
   const [editingWorkspace, setEditingWorkspace] = useState<WorkspaceRecord | null>(null);
@@ -158,6 +160,41 @@ export function Dashboard() {
       active = false;
     };
   }, [user?.email, user?.id]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function checkApiOnboarding() {
+      if (!user?.id) return;
+
+      try {
+        const response = await fetchWithAuth("/api/admin/settings", {
+          method: "GET"
+        });
+        if (!response.ok) return;
+
+        const payload = (await response.json().catch(() => ({}))) as {
+          security?: { modelApiConfigured?: boolean };
+          access?: { isAdmin?: boolean };
+        };
+        if (!active) return;
+
+        const isConfigured = Boolean(payload.security?.modelApiConfigured);
+        const isAdmin = Boolean(payload.access?.isAdmin);
+        if (!isConfigured && isAdmin) {
+          navigate("/admin?tab=model", { replace: true });
+        }
+      } catch {
+        // Ignore onboarding check failures; normal flows still work.
+      }
+    }
+
+    void checkApiOnboarding();
+
+    return () => {
+      active = false;
+    };
+  }, [navigate, user?.id]);
 
   useEffect(() => {
     function handleOutsideClick(event: MouseEvent) {
