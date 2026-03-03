@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -250,13 +250,10 @@ export function AdminConsoleLayout() {
     );
   }
 
-  const outletContext: AdminOutletContext = useMemo(
-    () => ({
-      identity,
-      refreshKey
-    }),
-    [identity, refreshKey]
-  );
+  const outletContext: AdminOutletContext = {
+    identity,
+    refreshKey
+  };
 
   return (
     <main className="min-h-screen bg-[#eef1f5] text-[var(--foreground)]">
