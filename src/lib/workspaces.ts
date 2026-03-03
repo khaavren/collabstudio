@@ -145,14 +145,14 @@ export async function deleteWorkspaceById(workspaceId: string) {
 
 export async function inviteWorkspaceCollaborator(
   workspaceId: string,
-  email: string,
+  identity: string,
   role: CollaboratorRole
 ) {
   await requestJson(
     `/api/workspaces/${workspaceId}/collaborators`,
     {
       method: "POST",
-      body: JSON.stringify({ email, role })
+      body: JSON.stringify({ identity, role })
     },
     "Unable to invite collaborator."
   );

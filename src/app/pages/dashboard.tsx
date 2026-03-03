@@ -346,13 +346,13 @@ export function Dashboard() {
     setEditingWorkspace(newWorkspace);
   }
 
-  function handleInviteCollaborator(email: string, role: string) {
+  function handleInviteCollaborator(identity: string, role: string) {
     if (!activeInvitingWorkspace) return;
 
     const normalizedRole = role === "admin" || role === "editor" || role === "viewer" ? role : "viewer";
     void (async () => {
       try {
-        await inviteWorkspaceCollaborator(activeInvitingWorkspace.id, email, normalizedRole);
+        await inviteWorkspaceCollaborator(activeInvitingWorkspace.id, identity, normalizedRole);
         const data = await fetchWorkspacesForUser({
           userId: user?.id ?? "",
           email: user?.email ?? null

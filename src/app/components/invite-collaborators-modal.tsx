@@ -13,7 +13,7 @@ interface InviteCollaboratorsModalProps {
   workspaceId: string;
   currentCollaborators: Collaborator[];
   onClose: () => void;
-  onInvite: (email: string, role: string) => void;
+  onInvite: (identity: string, role: string) => void;
   onRemove: (collaboratorId: string) => void;
   onRoleChange: (collaboratorId: string, newRole: string) => void;
 }
@@ -45,12 +45,12 @@ export function InviteCollaboratorsModal({
   onRemove,
   onRoleChange
 }: InviteCollaboratorsModalProps) {
-  const [email, setEmail] = useState("");
+  const [identity, setIdentity] = useState("");
   const [role, setRole] = useState<"viewer" | "editor" | "admin">("viewer");
   const [status, setStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   useEffect(() => {
-    setEmail("");
+    setIdentity("");
     setRole("viewer");
     setStatus(null);
   }, [workspaceId]);
@@ -67,20 +67,26 @@ export function InviteCollaboratorsModal({
   );
 
   function handleInvite() {
-    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedIdentity = identity.trim().toLowerCase();
+    const looksLikeEmail = normalizedIdentity.includes("@");
 
-    if (!EMAIL_REGEX.test(normalizedEmail)) {
+    if (!normalizedIdentity) {
+      setStatus({ type: "error", message: "Enter an email or invite name." });
+      return;
+    }
+
+    if (looksLikeEmail && !EMAIL_REGEX.test(normalizedIdentity)) {
       setStatus({ type: "error", message: "Enter a valid email address." });
       return;
     }
 
-    if (collaboratorEmails.has(normalizedEmail)) {
+    if (looksLikeEmail && collaboratorEmails.has(normalizedIdentity)) {
       setStatus({ type: "error", message: "This collaborator is already in the workspace." });
       return;
     }
 
-    onInvite(normalizedEmail, role);
-    setEmail("");
+    onInvite(normalizedIdentity, role);
+    setIdentity("");
     setRole("viewer");
     setStatus({ type: "success", message: "Invitation sent." });
   }
@@ -106,16 +112,16 @@ export function InviteCollaboratorsModal({
 
         <div className="space-y-5 overflow-y-auto px-5 py-4">
           <section className="space-y-3">
-            <h3 className="text-sm font-medium text-[var(--foreground)]">Invite by email</h3>
+            <h3 className="text-sm font-medium text-[var(--foreground)]">Invite by email or user name</h3>
             <div className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_140px_auto]">
               <label className="relative">
                 <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted-foreground)]" />
                 <input
                   className="w-full rounded-lg border border-[var(--border)] bg-white py-2.5 pl-9 pr-3 text-sm text-[var(--foreground)] outline-none"
-                  onChange={(event) => setEmail(event.target.value)}
-                  placeholder="name@company.com"
-                  type="email"
-                  value={email}
+                  onChange={(event) => setIdentity(event.target.value)}
+                  placeholder="name@company.com or Tin Hoang"
+                  type="text"
+                  value={identity}
                 />
               </label>
               <select
@@ -136,6 +142,9 @@ export function InviteCollaboratorsModal({
                 Send Invitation
               </button>
             </div>
+            <p className="text-xs text-[var(--muted-foreground)]">
+              Teammates can share their invite name from Settings.
+            </p>
             {status ? (
               <p
                 className={`text-sm ${

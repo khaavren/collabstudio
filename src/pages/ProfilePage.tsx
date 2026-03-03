@@ -396,6 +396,18 @@ export function ProfilePage() {
                 />
               </label>
 
+              <label className="block space-y-1">
+                <span className="text-sm text-[var(--foreground)]">Invite Name</span>
+                <input
+                  className="w-full cursor-not-allowed rounded-lg border border-[var(--border)] bg-[var(--accent)] px-3 py-2 text-sm text-[var(--muted-foreground)]"
+                  disabled
+                  value={user?.name?.trim() || displayName.trim() || "Member"}
+                />
+                <p className="text-xs text-[var(--muted-foreground)]">
+                  Teammates can use this name or your email when inviting you to a workspace.
+                </p>
+              </label>
+
               <div className="pt-2">
                 <button
                   className="rounded-lg bg-[var(--primary)] px-5 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-60"
