@@ -14,7 +14,7 @@ import {
   Users
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useAuth } from "@/app/context/auth-context";
 import { InviteCollaboratorsModal } from "../components/invite-collaborators-modal";
 import { EditWorkspaceModal } from "@/components/EditWorkspaceModal";
@@ -41,7 +41,6 @@ type Activity = {
 };
 
 const activities: Activity[] = [];
-const API_ONBOARDING_DEFER_KEY = "api_key_onboarding_deferred_until";
 
 function activityIcon(type: Activity["type"]) {
   if (type === "asset") return History;
@@ -51,7 +50,6 @@ function activityIcon(type: Activity["type"]) {
 
 export function Dashboard() {
   const { logout, user } = useAuth();
-  const navigate = useNavigate();
   const menuRef = useRef<HTMLDivElement>(null);
   const [workspaces, setWorkspaces] = useState<WorkspaceRecord[]>([]);
   const [editingWorkspace, setEditingWorkspace] = useState<WorkspaceRecord | null>(null);
@@ -197,13 +195,6 @@ export function Dashboard() {
         const isAdmin = Boolean(payload.access?.isAdmin);
         setShowApiKeySetupButton(!isConfigured);
         setCanAccessDeveloperDashboard(isAdmin);
-        const deferredUntilRaw = window.localStorage.getItem(API_ONBOARDING_DEFER_KEY);
-        const deferredUntil = deferredUntilRaw ? Number.parseInt(deferredUntilRaw, 10) : 0;
-        const isDeferred = Number.isFinite(deferredUntil) && deferredUntil > Date.now();
-
-        if (!isConfigured && !isDeferred) {
-          navigate("/settings/profile?tab=api&onboarding=1", { replace: true });
-        }
       } catch {
         if (!active) return;
         setShowApiKeySetupButton(false);
@@ -217,7 +208,7 @@ export function Dashboard() {
     return () => {
       active = false;
     };
-  }, [navigate, user?.id]);
+  }, [user?.id]);
 
   useEffect(() => {
     function handleOutsideClick(event: MouseEvent) {
