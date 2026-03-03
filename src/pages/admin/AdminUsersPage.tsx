@@ -72,6 +72,7 @@ export function AdminUsersPage() {
                 <tr>
                   <th className="px-4 py-2 font-semibold">User</th>
                   <th className="px-4 py-2 font-semibold">Email</th>
+                  <th className="px-4 py-2 font-semibold">Status</th>
                   <th className="px-4 py-2 font-semibold">Memberships</th>
                   <th className="px-4 py-2 font-semibold">Tickets</th>
                   <th className="px-4 py-2 font-semibold">Recent Activity</th>
@@ -88,6 +89,17 @@ export function AdminUsersPage() {
                       <p className="text-xs text-slate-500">{entry.id}</p>
                     </td>
                     <td className="px-4 py-3 text-slate-700">{entry.email ?? "No email"}</td>
+                    <td className="px-4 py-3 text-slate-700">
+                      {entry.isSuspended ? (
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
+                          Suspended
+                        </span>
+                      ) : (
+                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800">
+                          Active
+                        </span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-slate-700">{entry.membershipCount}</td>
                     <td className="px-4 py-3 text-slate-700">{entry.ticketCount}</td>
                     <td className="px-4 py-3 text-slate-700">

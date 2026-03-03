@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { getUserDetail, type UserDetail } from "@/lib/adminApi";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { deleteUserAccount, getUserDetail, setUserSuspended, type UserDetail } from "@/lib/adminApi";
 
 export function AdminUserDetailPage() {
   const { userId = "" } = useParams();
+  const navigate = useNavigate();
   const [detail, setDetail] = useState<UserDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [actionState, setActionState] = useState<"suspend" | "delete" | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -36,6 +39,55 @@ export function AdminUserDetailPage() {
       active = false;
     };
   }, [userId]);
+
+  async function handleSuspendToggle() {
+    if (!detail) return;
+
+    const nextSuspended = !detail.user.isSuspended;
+    const confirmed = window.confirm(
+      nextSuspended
+        ? "Suspend this user account? They will be blocked from signing in."
+        : "Unsuspend this user account?"
+    );
+    if (!confirmed) return;
+
+    setActionState("suspend");
+    setError(null);
+    setMessage(null);
+
+    try {
+      const result = await setUserSuspended(detail.user.id, nextSuspended);
+      const payload = await getUserDetail(detail.user.id);
+      setDetail(payload);
+      setMessage(result.message);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to update user suspension.");
+    } finally {
+      setActionState(null);
+    }
+  }
+
+  async function handleDeleteUser() {
+    if (!detail) return;
+
+    const confirmed = window.confirm(
+      "Delete this user account permanently? This cannot be undone."
+    );
+    if (!confirmed) return;
+
+    setActionState("delete");
+    setError(null);
+    setMessage(null);
+
+    try {
+      const result = await deleteUserAccount(detail.user.id);
+      navigate("/admin/users", { replace: true });
+      window.alert(result.message);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to delete user.");
+      setActionState(null);
+    }
+  }
 
   if (loading) {
     return <div className="rounded-md border border-slate-300 bg-white px-4 py-3 text-sm text-slate-500">Loading user details...</div>;
@@ -67,6 +119,9 @@ export function AdminUserDetailPage() {
       {error ? (
         <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
       ) : null}
+      {message ? (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{message}</div>
+      ) : null}
 
       <section className="grid gap-4 lg:grid-cols-[1fr_1fr]">
         <article className="rounded-lg border border-slate-300 bg-white p-4">
@@ -82,6 +137,12 @@ export function AdminUserDetailPage() {
             <p>
               <span className="font-medium">Last Sign In:</span>{" "}
               {detail.user.lastSignInAt ? new Date(detail.user.lastSignInAt).toLocaleString() : "Never"}
+            </p>
+            <p>
+              <span className="font-medium">Suspension:</span>{" "}
+              {detail.user.isSuspended
+                ? `Suspended until ${detail.user.suspendedUntil ? new Date(detail.user.suspendedUntil).toLocaleString() : "future date"}`
+                : "Active"}
             </p>
             <p>
               <span className="font-medium">Recent Activity:</span>{" "}
@@ -105,6 +166,35 @@ export function AdminUserDetailPage() {
             )}
           </div>
         </article>
+      </section>
+
+      <section className="rounded-lg border border-slate-300 bg-white p-4">
+        <h2 className="text-lg font-semibold text-[#243042]">User Controls</h2>
+        <p className="mt-1 text-sm text-slate-500">Manually suspend/unsuspend or permanently delete the account.</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            className={`rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-60 ${
+              detail.user.isSuspended ? "bg-emerald-600 hover:bg-emerald-700" : "bg-amber-600 hover:bg-amber-700"
+            }`}
+            disabled={actionState !== null}
+            onClick={() => void handleSuspendToggle()}
+            type="button"
+          >
+            {actionState === "suspend"
+              ? "Saving..."
+              : detail.user.isSuspended
+                ? "Unsuspend User"
+                : "Suspend User"}
+          </button>
+          <button
+            className="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+            disabled={actionState !== null}
+            onClick={() => void handleDeleteUser()}
+            type="button"
+          >
+            {actionState === "delete" ? "Deleting..." : "Delete User"}
+          </button>
+        </div>
       </section>
 
       <section className="grid gap-4 lg:grid-cols-[1fr_1fr]">

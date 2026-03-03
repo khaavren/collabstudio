@@ -147,6 +147,8 @@ export type UserSummary = {
   displayName: string;
   createdAt: string | null;
   lastSignInAt: string | null;
+  suspendedUntil: string | null;
+  isSuspended: boolean;
   memberships: Array<{
     organizationId: string;
     organizationName: string | null;
@@ -165,6 +167,8 @@ export type UserDetail = {
     displayName: string;
     createdAt: string | null;
     lastSignInAt: string | null;
+    suspendedUntil: string | null;
+    isSuspended: boolean;
   };
   memberships: Array<{
     id: string;
@@ -420,6 +424,27 @@ export async function getUserDetail(userId: string) {
     `/api/admin/users/${userId}`,
     { method: "GET" },
     "Unable to load user diagnostics."
+  );
+}
+
+export async function setUserSuspended(userId: string, suspended: boolean) {
+  return requestJson<{ ok: boolean; message: string }>(
+    `/api/admin/users/${userId}/suspend`,
+    {
+      method: "POST",
+      body: JSON.stringify({ suspended })
+    },
+    "Unable to update user suspension."
+  );
+}
+
+export async function deleteUserAccount(userId: string) {
+  return requestJson<{ ok: boolean; message: string }>(
+    `/api/admin/users/${userId}/delete`,
+    {
+      method: "POST"
+    },
+    "Unable to delete user."
   );
 }
 

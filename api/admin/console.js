@@ -7,6 +7,7 @@ const MAX_PAGE_SIZE = 200;
 const AUTH_PAGE_SIZE = 1000;
 const TICKET_STATUSES = new Set(["open", "pending", "solved", "closed"]);
 const TICKET_PRIORITIES = new Set(["low", "normal", "high", "urgent"]);
+const USER_SUSPEND_DURATION = "876000h";
 
 function queryValue(req, key) {
   const raw = req.query?.[key];
@@ -39,7 +40,10 @@ function parsePathInfo(req) {
 
   if (parts[2] === "users") {
     const userId = parts[3] ?? "";
+    const leaf = parts[4] ?? "";
     if (!userId) return { resource: "users" };
+    if (leaf === "suspend") return { resource: "user_suspend", userId };
+    if (leaf === "delete") return { resource: "user_delete", userId };
     return { resource: "user", userId };
   }
 
@@ -86,10 +90,32 @@ function parseIsoDate(value) {
   return Number.isFinite(ts) ? new Date(ts).toISOString() : null;
 }
 
+function parseBoolean(value) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true") return true;
+    if (normalized === "false") return false;
+  }
+  return null;
+}
+
 function isUuid(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     String(value ?? "")
   );
+}
+
+function parseDateEpoch(value) {
+  const text = nonEmpty(value);
+  if (!text) return null;
+  const parsed = Date.parse(text);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function isFutureDate(value) {
+  const timestamp = parseDateEpoch(value);
+  return timestamp !== null && timestamp > Date.now();
 }
 
 function toDisplayNameFromEmail(email) {
@@ -1187,12 +1213,16 @@ async function handleUsersList(req, res, context) {
   sendJson(res, 200, {
     users: selected.map((user) => {
       const membershipRows = membershipsByUser.get(user.id) ?? [];
+      const suspendedUntil = nonEmpty(user.banned_until);
+      const isSuspended = isFutureDate(suspendedUntil);
       return {
         id: user.id,
         email: user.email ?? null,
         displayName: getUserDisplayName(user),
         createdAt: user.created_at ?? null,
         lastSignInAt: user.last_sign_in_at ?? null,
+        suspendedUntil,
+        isSuspended,
         memberships: membershipRows,
         membershipCount: membershipRows.length,
         ticketCount: ticketCountByUser.get(user.id) ?? 0,
@@ -1290,7 +1320,9 @@ async function handleUserDetail(req, res, context, userId) {
       email: user.email ?? null,
       displayName: getUserDisplayName(user),
       createdAt: user.created_at ?? null,
-      lastSignInAt: user.last_sign_in_at ?? null
+      lastSignInAt: user.last_sign_in_at ?? null,
+      suspendedUntil: nonEmpty(user.banned_until),
+      isSuspended: isFutureDate(user.banned_until)
     },
     memberships: memberships.map((entry) => ({
       id: entry.id,
@@ -1326,6 +1358,138 @@ async function handleUserDetail(req, res, context, userId) {
       ...(ownedWorkspacesQuery.data ?? []).map((workspace) => workspace.updated_at ?? workspace.created_at),
       ...tickets.map((ticket) => ticket.updated_at ?? ticket.created_at)
     )
+  });
+}
+
+async function handleUserSuspend(req, res, context, userId) {
+  if (req.method !== "POST") {
+    res.setHeader("Allow", "POST");
+    sendJson(res, 405, { error: "Method not allowed." });
+    return;
+  }
+
+  if (!isUuid(userId)) {
+    sendJson(res, 400, { error: "User id is invalid." });
+    return;
+  }
+
+  if (userId === context.actor.id) {
+    sendJson(res, 400, { error: "You cannot suspend your own account." });
+    return;
+  }
+
+  const body = (await getJsonBody(req)) ?? {};
+  const suspended = parseBoolean(body.suspended);
+  if (suspended === null) {
+    sendJson(res, 400, { error: "Suspended flag must be true or false." });
+    return;
+  }
+
+  const { data: targetUserData, error: targetUserError } = await context.adminClient.auth.admin.getUserById(userId);
+  if (targetUserError) {
+    if (Number(targetUserError.status ?? 0) === 404) {
+      sendJson(res, 404, { error: "User not found." });
+      return;
+    }
+    throw new HttpError(targetUserError.message ?? "Unable to load user.", 500);
+  }
+
+  const targetUser = targetUserData?.user ?? null;
+  if (!targetUser) {
+    sendJson(res, 404, { error: "User not found." });
+    return;
+  }
+
+  const { error: updateError } = await context.adminClient.auth.admin.updateUserById(userId, {
+    ban_duration: suspended ? USER_SUSPEND_DURATION : "none"
+  });
+
+  if (updateError) {
+    throw new HttpError("Unable to update user suspension.", 500);
+  }
+
+  await recordAuditEvent(context, {
+    organizationId: context.organizationId,
+    action: suspended ? "user.suspended" : "user.unsuspended",
+    targetType: "user",
+    targetId: userId,
+    metadata: {
+      userEmail: targetUser.email ?? null
+    }
+  });
+
+  sendJson(res, 200, {
+    ok: true,
+    message: suspended ? "User suspended." : "User unsuspended."
+  });
+}
+
+async function handleUserDelete(req, res, context, userId) {
+  if (req.method !== "POST") {
+    res.setHeader("Allow", "POST");
+    sendJson(res, 405, { error: "Method not allowed." });
+    return;
+  }
+
+  if (!isUuid(userId)) {
+    sendJson(res, 400, { error: "User id is invalid." });
+    return;
+  }
+
+  if (userId === context.actor.id) {
+    sendJson(res, 400, { error: "You cannot delete your own account." });
+    return;
+  }
+
+  const { data: targetUserData, error: targetUserError } = await context.adminClient.auth.admin.getUserById(userId);
+  if (targetUserError) {
+    if (Number(targetUserError.status ?? 0) === 404) {
+      sendJson(res, 404, { error: "User not found." });
+      return;
+    }
+    throw new HttpError(targetUserError.message ?? "Unable to load user.", 500);
+  }
+
+  const targetUser = targetUserData?.user ?? null;
+  if (!targetUser) {
+    sendJson(res, 404, { error: "User not found." });
+    return;
+  }
+
+  const { error: deleteError } = await context.adminClient.auth.admin.deleteUser(userId, true);
+  if (deleteError && Number(deleteError.status ?? 0) !== 404) {
+    throw new HttpError("Unable to delete user.", 500);
+  }
+
+  const [membershipCleanup, collaboratorCleanup] = await Promise.all([
+    context.adminClient.from("team_members").delete().eq("user_id", userId),
+    context.adminClient
+      .from("workspace_collaborators")
+      .update({ user_id: null })
+      .eq("user_id", userId)
+  ]);
+
+  if (membershipCleanup.error) {
+    throw new HttpError("User deleted, but team membership cleanup failed.", 500);
+  }
+
+  if (collaboratorCleanup.error) {
+    throw new HttpError("User deleted, but collaborator cleanup failed.", 500);
+  }
+
+  await recordAuditEvent(context, {
+    organizationId: context.organizationId,
+    action: "user.deleted",
+    targetType: "user",
+    targetId: userId,
+    metadata: {
+      userEmail: targetUser.email ?? null
+    }
+  });
+
+  sendJson(res, 200, {
+    ok: true,
+    message: "User deleted."
   });
 }
 
@@ -1446,10 +1610,11 @@ function resolveResource(req) {
 
 export default async function handler(req, res) {
   try {
-    const { user: actor } = await requireAdmin(req);
+    const { user: actor, organization } = await requireAdmin(req);
     const adminClient = getSupabaseAdminClient();
     const context = {
       actor,
+      organizationId: organization.id,
       adminClient,
       authUsers: null,
       authUserMaps: null
@@ -1508,6 +1673,16 @@ export default async function handler(req, res) {
 
     if (resource === "user") {
       await handleUserDetail(req, res, context, userId);
+      return;
+    }
+
+    if (resource === "user_suspend") {
+      await handleUserSuspend(req, res, context, userId);
+      return;
+    }
+
+    if (resource === "user_delete") {
+      await handleUserDelete(req, res, context, userId);
       return;
     }
 

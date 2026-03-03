@@ -45,6 +45,14 @@
       "dest": "/api/admin/console.js?resource=customers"
     },
     {
+      "src": "/api/admin/users/([^/]+)/suspend",
+      "dest": "/api/admin/console.js?resource=user_suspend&userId=$1"
+    },
+    {
+      "src": "/api/admin/users/([^/]+)/delete",
+      "dest": "/api/admin/console.js?resource=user_delete&userId=$1"
+    },
+    {
       "src": "/api/admin/users/([^/]+)",
       "dest": "/api/admin/console.js?resource=user&userId=$1"
     },
