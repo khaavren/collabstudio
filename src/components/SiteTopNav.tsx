@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowRight, ChevronDown, LogOut, UserCircle2 } from "lucide-react";
+import { ArrowRight, ChevronDown, LayoutDashboard, LogOut, UserCircle2 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/app/context/auth-context";
+import { fetchWithAuth } from "@/lib/admin";
 
 export function SiteTopNav() {
   const location = useLocation();
   const menuRef = useRef<HTMLDivElement>(null);
   const { isAuthenticated, logout, user } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [canAccessDeveloperDashboard, setCanAccessDeveloperDashboard] = useState(false);
 
   const showHomeAnchors = location.pathname === "/";
 
@@ -36,6 +38,42 @@ export function SiteTopNav() {
       window.removeEventListener("keydown", handleEscape);
     };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadAccess() {
+      if (!isAuthenticated || !user?.id) {
+        if (!active) return;
+        setCanAccessDeveloperDashboard(false);
+        return;
+      }
+
+      try {
+        const response = await fetchWithAuth("/api/profile", { method: "GET" });
+        if (!response.ok) {
+          if (!active) return;
+          setCanAccessDeveloperDashboard(false);
+          return;
+        }
+
+        const payload = (await response.json().catch(() => ({}))) as {
+          access?: { isAdmin?: boolean };
+        };
+        if (!active) return;
+        setCanAccessDeveloperDashboard(Boolean(payload.access?.isAdmin));
+      } catch {
+        if (!active) return;
+        setCanAccessDeveloperDashboard(false);
+      }
+    }
+
+    void loadAccess();
+
+    return () => {
+      active = false;
+    };
+  }, [isAuthenticated, user?.id]);
 
   return (
     <header className="border-b border-[var(--border)] bg-[var(--background)]/95">
@@ -106,6 +144,17 @@ export function SiteTopNav() {
                       <UserCircle2 className="h-4 w-4" />
                       Settings
                     </Link>
+                    {canAccessDeveloperDashboard ? (
+                      <Link
+                        className="flex items-center gap-2 rounded-md px-2 py-2 text-sm text-[var(--foreground)] transition hover:bg-[var(--accent)]"
+                        onClick={() => setMenuOpen(false)}
+                        role="menuitem"
+                        to="/admin"
+                      >
+                        <LayoutDashboard className="h-4 w-4" />
+                        Developer Admin Panel
+                      </Link>
+                    ) : null}
                     <button
                       className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-[var(--foreground)] transition hover:bg-[var(--accent)]"
                       onClick={() => {
