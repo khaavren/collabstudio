@@ -59,6 +59,7 @@ export function Dashboard() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoadingWorkspaces, setIsLoadingWorkspaces] = useState(true);
+  const [showApiKeySetupButton, setShowApiKeySetupButton] = useState(false);
 
   const currentUserId = user?.id ?? "";
   const currentUserName = user?.name?.trim() || (user?.email ? user.email.split("@")[0] : "Member");
@@ -165,7 +166,11 @@ export function Dashboard() {
     let active = true;
 
     async function checkApiOnboarding() {
-      if (!user?.id) return;
+      if (!user?.id) {
+        if (!active) return;
+        setShowApiKeySetupButton(false);
+        return;
+      }
 
       try {
         const response = await fetchWithAuth("/api/admin/settings", {
@@ -181,10 +186,13 @@ export function Dashboard() {
 
         const isConfigured = Boolean(payload.security?.modelApiConfigured);
         const isAdmin = Boolean(payload.access?.isAdmin);
+        setShowApiKeySetupButton(!isConfigured && isAdmin);
         if (!isConfigured && isAdmin) {
           navigate("/admin?tab=model", { replace: true });
         }
       } catch {
+        if (!active) return;
+        setShowApiKeySetupButton(false);
         // Ignore onboarding check failures; normal flows still work.
       }
     }
@@ -489,14 +497,25 @@ export function Dashboard() {
                 Workspaces you own and manage
               </p>
             </div>
-            <button
-              className="inline-flex items-center gap-2 rounded-xl bg-[var(--primary)] px-5 py-3 text-xl font-medium text-white transition hover:opacity-90"
-              onClick={handleCreateWorkspace}
-              type="button"
-            >
-              <Plus className="h-5 w-5" />
-              New Workspace
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              {showApiKeySetupButton ? (
+                <Link
+                  className="inline-flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--card)] px-4 py-3 text-base font-medium text-[var(--foreground)] transition hover:bg-[var(--accent)]"
+                  to="/admin?tab=model"
+                >
+                  <Plus className="h-4 w-4" />
+                  + API Key for your Workspace
+                </Link>
+              ) : null}
+              <button
+                className="inline-flex items-center gap-2 rounded-xl bg-[var(--primary)] px-5 py-3 text-xl font-medium text-white transition hover:opacity-90"
+                onClick={handleCreateWorkspace}
+                type="button"
+              >
+                <Plus className="h-5 w-5" />
+                New Workspace
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
