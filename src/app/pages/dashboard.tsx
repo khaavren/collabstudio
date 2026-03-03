@@ -521,7 +521,7 @@ export function Dashboard() {
                   to="/settings/profile?tab=api"
                 >
                   <Plus className="h-4 w-4" />
-                  + API Key for your Workspace
+                  API Key for your Workspace
                 </Link>
               ) : null}
               <button
