@@ -277,7 +277,6 @@ async function requestGeneratedOutput(
   conversationContext?: Array<{ role: "user" | "assistant"; content: string }>,
   model?: string | null
 ) {
-  const fallback = placeholderUrl(prompt, size);
   const {
     data: { session }
   } = await supabase.auth.getSession();
@@ -313,10 +312,9 @@ async function requestGeneratedOutput(
 
     if (!response.ok) {
       if (payload.configured === false) {
-        return {
-          outputType: "image" as const,
-          imageUrl: fallback
-        };
+        throw new Error(
+          payload.error ?? "Image generation is not configured. Set your provider API key in Admin settings."
+        );
       }
 
       throw new Error(payload.error ?? "Configured provider failed to generate an image.");
@@ -338,10 +336,9 @@ async function requestGeneratedOutput(
     }
 
     if (payload.configured === false) {
-      return {
-        outputType: "image" as const,
-        imageUrl: fallback
-      };
+      throw new Error(
+        payload.error ?? "Image generation is not configured. Set your provider API key in Admin settings."
+      );
     }
 
     throw new Error("Image generation returned no image URL.");

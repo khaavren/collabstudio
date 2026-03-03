@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { decryptSecret } from "./_lib/encryption.js";
 import { HttpError, allowMethod, getJsonBody, sendJson } from "./_lib/http.js";
 import { defaultModelForProvider, normalizeProvider } from "./_lib/providers.js";
@@ -262,16 +261,6 @@ function createOpenAiHttpError(response, raw) {
   error.retryable = retryable;
   error.modelInvalid = modelInvalid;
   return error;
-}
-
-function buildPlaceholderUrl(prompt, size, providerUsed, modelUsed) {
-  const { width, height } = parseSize(size);
-  const seed = createHash("sha256")
-    .update(`${prompt}:${size}:${providerUsed}:${modelUsed}:band-joes-studio`)
-    .digest("hex")
-    .slice(0, 16);
-
-  return `https://picsum.photos/seed/${seed}/${width}/${height}`;
 }
 
 function readSafeDefaultParams(value) {
@@ -1278,15 +1267,9 @@ export default async function handler(req, res) {
       return;
     }
 
-    const imageUrl = buildPlaceholderUrl(prompt, size, providerUsed, modelUsed);
-
-    if (organizationId) {
-      await incrementUsage(organizationId, true);
-    }
-
-    sendJson(res, 200, {
-      outputType: "image",
-      imageUrl,
+    sendJson(res, 503, {
+      error:
+        "Image generation is not configured for this studio. Add your provider API key in Admin > Model API Configuration.",
       configured,
       providerUsed,
       modelUsed
