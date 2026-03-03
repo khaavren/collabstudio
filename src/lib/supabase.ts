@@ -313,7 +313,8 @@ async function requestGeneratedOutput(
     if (!response.ok) {
       if (payload.configured === false) {
         throw new Error(
-          payload.error ?? "Image generation is not configured. Set your provider API key in Admin settings."
+          payload.error ??
+            "Image generation is not configured. Set your provider API key in Settings > Workspace API Settings."
         );
       }
 
@@ -337,7 +338,8 @@ async function requestGeneratedOutput(
 
     if (payload.configured === false) {
       throw new Error(
-        payload.error ?? "Image generation is not configured. Set your provider API key in Admin settings."
+        payload.error ??
+          "Image generation is not configured. Set your provider API key in Settings > Workspace API Settings."
       );
     }
 
@@ -349,7 +351,7 @@ async function requestGeneratedOutput(
     throw new Error(
       caughtError instanceof Error
         ? caughtError.message
-        : "Image generation failed. Check Model API configuration in Admin."
+        : "Image generation failed. Check Workspace API Settings."
     );
   }
 }

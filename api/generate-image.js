@@ -1259,7 +1259,7 @@ export default async function handler(req, res) {
       sendJson(res, 200, {
         outputType: "text",
         responseText:
-          "Text mode requested, but no model API is configured for this studio. Add your provider key in Admin > Model API Configuration.",
+          "Text mode requested, but no model API is configured for this studio. Add your provider key in Settings > Workspace API Settings.",
         configured,
         providerUsed,
         modelUsed
@@ -1269,7 +1269,7 @@ export default async function handler(req, res) {
 
     sendJson(res, 503, {
       error:
-        "Image generation is not configured for this studio. Add your provider API key in Admin > Model API Configuration.",
+        "Image generation is not configured for this studio. Add your provider API key in Settings > Workspace API Settings.",
       configured,
       providerUsed,
       modelUsed

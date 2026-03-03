@@ -1133,7 +1133,7 @@ export function AdminPage() {
             <p className="mt-1 text-sm text-slate-500">
               Studio administration only. Personal account details are managed in{" "}
               <Link className="font-medium text-slate-700 underline" to="/settings/profile">
-                Profile Settings
+                Settings
               </Link>
               .
             </p>

@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { encryptSecret } from "../_lib/encryption.js";
-import { requireAdmin, requireOrganizationMember } from "../_lib/auth.js";
+import { requireAdmin } from "../_lib/auth.js";
 import { HttpError, allowMethod, getJsonBody, sendJson } from "../_lib/http.js";
 import {
   defaultModelForProvider,
@@ -409,7 +409,7 @@ async function getSettingsPayload(organizationId, accessRole = "admin") {
 }
 
 async function handleGet(req, res) {
-  const { organization, membership } = await requireOrganizationMember(req);
+  const { organization, membership } = await requireAdmin(req);
   const payload = await getSettingsPayload(organization.id, membership.role);
   sendJson(res, 200, payload);
 }

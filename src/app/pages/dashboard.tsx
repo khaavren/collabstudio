@@ -62,6 +62,7 @@ export function Dashboard() {
   const [error, setError] = useState<string | null>(null);
   const [isLoadingWorkspaces, setIsLoadingWorkspaces] = useState(true);
   const [showApiKeySetupButton, setShowApiKeySetupButton] = useState(false);
+  const [canAccessDeveloperDashboard, setCanAccessDeveloperDashboard] = useState(false);
 
   const currentUserId = user?.id ?? "";
   const currentUserName = user?.name?.trim() || (user?.email ? user.email.split("@")[0] : "Member");
@@ -171,34 +172,42 @@ export function Dashboard() {
       if (!user?.id) {
         if (!active) return;
         setShowApiKeySetupButton(false);
+        setCanAccessDeveloperDashboard(false);
         return;
       }
 
       try {
-        const response = await fetchWithAuth("/api/admin/settings", {
+        const response = await fetchWithAuth("/api/profile", {
           method: "GET"
         });
-        if (!response.ok) return;
+        if (!response.ok) {
+          if (!active) return;
+          setShowApiKeySetupButton(false);
+          setCanAccessDeveloperDashboard(false);
+          return;
+        }
 
         const payload = (await response.json().catch(() => ({}))) as {
-          security?: { modelApiConfigured?: boolean };
+          apiSettings?: { configured?: boolean };
           access?: { isAdmin?: boolean };
         };
         if (!active) return;
 
-        const isConfigured = Boolean(payload.security?.modelApiConfigured);
+        const isConfigured = Boolean(payload.apiSettings?.configured);
         const isAdmin = Boolean(payload.access?.isAdmin);
-        setShowApiKeySetupButton(!isConfigured && isAdmin);
+        setShowApiKeySetupButton(!isConfigured);
+        setCanAccessDeveloperDashboard(isAdmin);
         const deferredUntilRaw = window.localStorage.getItem(API_ONBOARDING_DEFER_KEY);
         const deferredUntil = deferredUntilRaw ? Number.parseInt(deferredUntilRaw, 10) : 0;
         const isDeferred = Number.isFinite(deferredUntil) && deferredUntil > Date.now();
 
-        if (!isConfigured && isAdmin && !isDeferred) {
-          navigate("/admin?tab=model&onboarding=1", { replace: true });
+        if (!isConfigured && !isDeferred) {
+          navigate("/settings/profile?tab=api&onboarding=1", { replace: true });
         }
       } catch {
         if (!active) return;
         setShowApiKeySetupButton(false);
+        setCanAccessDeveloperDashboard(false);
         // Ignore onboarding check failures; normal flows still work.
       }
     }
@@ -447,17 +456,19 @@ export function Dashboard() {
                     to="/settings/profile"
                   >
                     <UserCircle2 className="h-4 w-4" />
-                    Profile
+                    Settings
                   </Link>
-                  <Link
-                    className="flex items-center gap-2 rounded-md px-2 py-2 text-sm text-[var(--foreground)] transition hover:bg-[var(--accent)]"
-                    onClick={() => setMenuOpen(false)}
-                    role="menuitem"
-                    to="/admin"
-                  >
-                    <LayoutDashboard className="h-4 w-4" />
-                    Developer Admin Panel
-                  </Link>
+                  {canAccessDeveloperDashboard ? (
+                    <Link
+                      className="flex items-center gap-2 rounded-md px-2 py-2 text-sm text-[var(--foreground)] transition hover:bg-[var(--accent)]"
+                      onClick={() => setMenuOpen(false)}
+                      role="menuitem"
+                      to="/admin"
+                    >
+                      <LayoutDashboard className="h-4 w-4" />
+                      Developer Admin Panel
+                    </Link>
+                  ) : null}
                   <button
                     className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-[var(--foreground)] transition hover:bg-[var(--accent)]"
                     onClick={() => {
@@ -516,7 +527,7 @@ export function Dashboard() {
               {showApiKeySetupButton ? (
                 <Link
                   className="inline-flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--card)] px-4 py-3 text-base font-medium text-[var(--foreground)] transition hover:bg-[var(--accent)]"
-                  to="/admin?tab=model"
+                  to="/settings/profile?tab=api"
                 >
                   <Plus className="h-4 w-4" />
                   + API Key for your Workspace

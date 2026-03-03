@@ -120,13 +120,7 @@ export function Sidebar({
             className="mb-2 block rounded-lg px-2 py-1 text-xs text-[var(--muted-foreground)] transition hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
             href="/settings/profile"
           >
-            Profile Settings
-          </a>
-          <a
-            className="mb-2 block rounded-lg px-2 py-1 text-xs text-[var(--muted-foreground)] transition hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
-            href="/admin"
-          >
-            Admin Panel
+            Settings
           </a>
           <div className="flex items-center gap-3 rounded-lg px-2 py-1.5">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--muted)] text-xs font-medium text-[var(--foreground)]">
