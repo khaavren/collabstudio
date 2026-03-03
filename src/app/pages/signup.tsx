@@ -11,6 +11,12 @@ export function SignupPage() {
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  function isSignupConfirmationNotice(message: string) {
+    const normalized = message.toLowerCase();
+    return normalized.includes("account created") && normalized.includes("check your email");
+  }
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -21,13 +27,19 @@ export function SignupPage() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
+    setNotice(null);
     setIsSubmitting(true);
 
     try {
       await signup(fullName, email, password);
       navigate("/", { replace: true });
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Unable to sign up.");
+      const message = caught instanceof Error ? caught.message : "Unable to sign up.";
+      if (isSignupConfirmationNotice(message)) {
+        setNotice(message);
+      } else {
+        setError(message);
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -46,6 +58,11 @@ export function SignupPage() {
           {error ? (
             <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
               {error}
+            </div>
+          ) : null}
+          {notice ? (
+            <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+              {notice}
             </div>
           ) : null}
 
