@@ -3,6 +3,7 @@ import {
   Clock,
   FolderTree,
   History,
+  LayoutDashboard,
   LogOut,
   MessageSquare,
   Pencil,
@@ -447,6 +448,15 @@ export function Dashboard() {
                   >
                     <UserCircle2 className="h-4 w-4" />
                     Profile
+                  </Link>
+                  <Link
+                    className="flex items-center gap-2 rounded-md px-2 py-2 text-sm text-[var(--foreground)] transition hover:bg-[var(--accent)]"
+                    onClick={() => setMenuOpen(false)}
+                    role="menuitem"
+                    to="/admin"
+                  >
+                    <LayoutDashboard className="h-4 w-4" />
+                    Developer Admin Panel
                   </Link>
                   <button
                     className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-[var(--foreground)] transition hover:bg-[var(--accent)]"
