@@ -11,7 +11,8 @@ export default async function handler(req, res) {
       authorized: true,
       organizationId: organization.id,
       role: membership.role,
-      email: user.email ?? null
+      email: user.email ?? null,
+      userId: user.id
     });
   } catch (error) {
     if (error instanceof HttpError) {

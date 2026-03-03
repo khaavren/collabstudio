@@ -17,6 +17,50 @@
       "dest": "/api/admin/team/[memberId].js?memberId=$1"
     },
     {
+      "src": "/api/admin/support/tickets/([^/]+)/messages",
+      "dest": "/api/admin/console.js?resource=support_ticket_messages&ticketId=$1"
+    },
+    {
+      "src": "/api/admin/support/tickets/([^/]+)/notes",
+      "dest": "/api/admin/console.js?resource=support_ticket_notes&ticketId=$1"
+    },
+    {
+      "src": "/api/admin/support/tickets/([^/]+)/update",
+      "dest": "/api/admin/console.js?resource=support_ticket_update&ticketId=$1"
+    },
+    {
+      "src": "/api/admin/support/tickets/([^/]+)",
+      "dest": "/api/admin/console.js?resource=support_ticket&ticketId=$1"
+    },
+    {
+      "src": "/api/admin/support/tickets",
+      "dest": "/api/admin/console.js?resource=support_tickets"
+    },
+    {
+      "src": "/api/admin/customers/([^/]+)",
+      "dest": "/api/admin/console.js?resource=customer&orgId=$1"
+    },
+    {
+      "src": "/api/admin/customers",
+      "dest": "/api/admin/console.js?resource=customers"
+    },
+    {
+      "src": "/api/admin/users/([^/]+)",
+      "dest": "/api/admin/console.js?resource=user&userId=$1"
+    },
+    {
+      "src": "/api/admin/users",
+      "dest": "/api/admin/console.js?resource=users"
+    },
+    {
+      "src": "/api/admin/audit",
+      "dest": "/api/admin/console.js?resource=audit"
+    },
+    {
+      "src": "/api/admin/system/health",
+      "dest": "/api/admin/console.js?resource=system_health"
+    },
+    {
       "handle": "filesystem"
     },
     {

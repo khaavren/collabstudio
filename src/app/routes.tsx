@@ -4,9 +4,18 @@ import { LoginPage } from "@/app/pages/login";
 import { ForgotPasswordPage } from "@/app/pages/forgot-password";
 import { ResetPasswordPage } from "@/app/pages/reset-password";
 import { SignupPage } from "@/app/pages/signup";
-import { AdminPage } from "@/pages/AdminPage";
 import { ProfilePage } from "@/pages/ProfilePage";
 import { RoomPage } from "@/pages/RoomPage";
+import { AdminConsoleLayout } from "@/components/admin/AdminConsoleLayout";
+import { AdminDashboardPage } from "@/pages/admin/AdminDashboardPage";
+import { AdminSupportPage } from "@/pages/admin/AdminSupportPage";
+import { AdminTicketDetailPage } from "@/pages/admin/AdminTicketDetailPage";
+import { AdminCustomersPage } from "@/pages/admin/AdminCustomersPage";
+import { AdminCustomerDetailPage } from "@/pages/admin/AdminCustomerDetailPage";
+import { AdminUsersPage } from "@/pages/admin/AdminUsersPage";
+import { AdminUserDetailPage } from "@/pages/admin/AdminUserDetailPage";
+import { AdminAuditPage } from "@/pages/admin/AdminAuditPage";
+import { AdminSystemPage } from "@/pages/admin/AdminSystemPage";
 
 function roomLoader({ params }: LoaderFunctionArgs) {
   return {
@@ -55,7 +64,45 @@ const router = createBrowserRouter([
   },
   {
     path: "/admin",
-    element: <AdminPage />
+    element: <AdminConsoleLayout />,
+    children: [
+      {
+        index: true,
+        element: <AdminDashboardPage />
+      },
+      {
+        path: "support",
+        element: <AdminSupportPage />
+      },
+      {
+        path: "support/tickets/:ticketId",
+        element: <AdminTicketDetailPage />
+      },
+      {
+        path: "customers",
+        element: <AdminCustomersPage />
+      },
+      {
+        path: "customers/:orgId",
+        element: <AdminCustomerDetailPage />
+      },
+      {
+        path: "users",
+        element: <AdminUsersPage />
+      },
+      {
+        path: "users/:userId",
+        element: <AdminUserDetailPage />
+      },
+      {
+        path: "audit",
+        element: <AdminAuditPage />
+      },
+      {
+        path: "system",
+        element: <AdminSystemPage />
+      }
+    ]
   },
   {
     path: "/settings/profile",

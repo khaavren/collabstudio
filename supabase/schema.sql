@@ -521,9 +521,74 @@ create table if not exists usage_metrics (
   unique (organization_id, month)
 );
 
+create table if not exists support_tickets (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid references organizations(id) on delete set null,
+  requester_email text not null,
+  requester_user_id uuid references auth.users(id) on delete set null,
+  subject text not null,
+  status text not null check (status in ('open', 'pending', 'solved', 'closed')),
+  priority text not null check (priority in ('low', 'normal', 'high', 'urgent')),
+  category text,
+  assignee_user_id uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists support_messages (
+  id uuid primary key default gen_random_uuid(),
+  ticket_id uuid not null references support_tickets(id) on delete cascade,
+  author_type text not null check (author_type in ('customer', 'admin')),
+  author_user_id uuid references auth.users(id) on delete set null,
+  body text not null,
+  attachments jsonb not null default '[]'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists support_internal_notes (
+  id uuid primary key default gen_random_uuid(),
+  ticket_id uuid not null references support_tickets(id) on delete cascade,
+  admin_user_id uuid not null references auth.users(id) on delete cascade,
+  body text not null,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists audit_events (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid,
+  actor_user_id uuid,
+  actor_email text,
+  action text not null,
+  target_type text,
+  target_id text,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists system_errors (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid,
+  severity text check (severity in ('info', 'warning', 'error', 'critical')),
+  source text,
+  message text not null,
+  details jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
 create index if not exists team_members_org_idx on team_members (organization_id);
 create index if not exists team_members_user_idx on team_members (user_id);
 create index if not exists usage_metrics_org_month_idx on usage_metrics (organization_id, month);
+create index if not exists support_tickets_org_idx on support_tickets (organization_id);
+create index if not exists support_tickets_status_priority_idx on support_tickets (status, priority);
+create index if not exists support_tickets_updated_idx on support_tickets (updated_at desc);
+create index if not exists support_tickets_requester_email_idx on support_tickets (requester_email);
+create index if not exists support_messages_ticket_created_idx on support_messages (ticket_id, created_at);
+create index if not exists support_internal_notes_ticket_created_idx on support_internal_notes (ticket_id, created_at);
+create index if not exists audit_events_created_idx on audit_events (created_at desc);
+create index if not exists audit_events_org_idx on audit_events (organization_id);
+create index if not exists audit_events_actor_idx on audit_events (actor_user_id);
+create index if not exists audit_events_action_idx on audit_events (action);
+create index if not exists system_errors_created_idx on system_errors (created_at desc);
 
 drop trigger if exists organizations_set_updated_at on organizations;
 create trigger organizations_set_updated_at
@@ -537,10 +602,21 @@ before update on api_settings
 for each row
 execute function public.set_updated_at();
 
+drop trigger if exists support_tickets_set_updated_at on support_tickets;
+create trigger support_tickets_set_updated_at
+before update on support_tickets
+for each row
+execute function public.set_updated_at();
+
 alter table organizations enable row level security;
 alter table team_members enable row level security;
 alter table api_settings enable row level security;
 alter table usage_metrics enable row level security;
+alter table support_tickets enable row level security;
+alter table support_messages enable row level security;
+alter table support_internal_notes enable row level security;
+alter table audit_events enable row level security;
+alter table system_errors enable row level security;
 
 drop policy if exists "organizations_select_member" on organizations;
 create policy "organizations_select_member"
