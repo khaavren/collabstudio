@@ -7,7 +7,7 @@ import {
   LogOut,
   Upload
 } from "lucide-react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import type { User } from "@supabase/supabase-js";
 import { fetchWithAuth, type AdminSettingsResponse, type TeamRole } from "@/lib/admin";
 import { supabase } from "@/lib/supabase";
@@ -66,6 +66,8 @@ type AdminTab = "organization" | "account" | "developer" | "model" | "usage" | "
 type DeveloperUserRow = AdminSettingsResponse["developerDashboard"]["users"][number];
 type DeveloperRoleFilter = "all" | TeamRole | "none";
 const WORKSPACE_PATH = "/";
+const API_ONBOARDING_DEFER_KEY = "api_key_onboarding_deferred_until";
+const API_ONBOARDING_DEFER_MS = 24 * 60 * 60 * 1000;
 
 function parseAdminTab(value: string | null): AdminTab {
   if (value === "organization") return "organization";
@@ -298,6 +300,7 @@ async function uploadLogo(file: File, organizationId: string) {
 
 export function AdminPage() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
@@ -1078,6 +1081,7 @@ export function AdminPage() {
 
   const logoUrl = publicStorageUrl(settings.organization.logo_storage_path);
   const canManageAdminSettings = settings.access.isAdmin;
+  const onboardingMode = new URLSearchParams(location.search).get("onboarding") === "1";
   const tabs: Array<{ id: AdminTab; label: string }> = [
     { id: "organization", label: "Organization Profile" },
     { id: "account", label: "Account & Team" },
@@ -1731,6 +1735,27 @@ export function AdminPage() {
                 <div className="border-b border-slate-300 px-5 py-4">
                   <h2 className="text-2xl font-semibold text-[#243042]">Model API Configuration</h2>
                 </div>
+
+                {onboardingMode && !settings.apiSettings.configured ? (
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-300 bg-[#eef6ff] px-5 py-3">
+                    <p className="text-sm text-slate-700">
+                      Add your model provider API key to enable prompting. You can also do this later.
+                    </p>
+                    <button
+                      className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 transition hover:bg-slate-50"
+                      onClick={() => {
+                        window.localStorage.setItem(
+                          API_ONBOARDING_DEFER_KEY,
+                          String(Date.now() + API_ONBOARDING_DEFER_MS)
+                        );
+                        navigate("/", { replace: true });
+                      }}
+                      type="button"
+                    >
+                      Add later
+                    </button>
+                  </div>
+                ) : null}
 
                 <div className="grid gap-3 p-5 sm:grid-cols-2">
                   <label className="text-lg font-medium text-slate-700">

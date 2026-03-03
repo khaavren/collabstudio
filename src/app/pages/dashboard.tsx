@@ -40,6 +40,7 @@ type Activity = {
 };
 
 const activities: Activity[] = [];
+const API_ONBOARDING_DEFER_KEY = "api_key_onboarding_deferred_until";
 
 function activityIcon(type: Activity["type"]) {
   if (type === "asset") return History;
@@ -187,8 +188,12 @@ export function Dashboard() {
         const isConfigured = Boolean(payload.security?.modelApiConfigured);
         const isAdmin = Boolean(payload.access?.isAdmin);
         setShowApiKeySetupButton(!isConfigured && isAdmin);
-        if (!isConfigured && isAdmin) {
-          navigate("/admin?tab=model", { replace: true });
+        const deferredUntilRaw = window.localStorage.getItem(API_ONBOARDING_DEFER_KEY);
+        const deferredUntil = deferredUntilRaw ? Number.parseInt(deferredUntilRaw, 10) : 0;
+        const isDeferred = Number.isFinite(deferredUntil) && deferredUntil > Date.now();
+
+        if (!isConfigured && isAdmin && !isDeferred) {
+          navigate("/admin?tab=model&onboarding=1", { replace: true });
         }
       } catch {
         if (!active) return;
