@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { deleteUserAccount, getUserDetail, setUserSuspended, type UserDetail } from "@/lib/adminApi";
+import {
+  deleteUserAccount,
+  getUserDetail,
+  sendUserPasswordReset,
+  setUserSuspended,
+  type UserDetail
+} from "@/lib/adminApi";
 
 export function AdminUserDetailPage() {
   const { userId = "" } = useParams();
@@ -9,7 +15,7 @@ export function AdminUserDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [actionState, setActionState] = useState<"suspend" | "delete" | null>(null);
+  const [actionState, setActionState] = useState<"suspend" | "delete" | "reset" | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -85,6 +91,28 @@ export function AdminUserDetailPage() {
       window.alert(result.message);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to delete user.");
+      setActionState(null);
+    }
+  }
+
+  async function handleSendPasswordReset() {
+    if (!detail) return;
+
+    if (!detail.user.email) {
+      setError("This user does not have an email login.");
+      return;
+    }
+
+    setActionState("reset");
+    setError(null);
+    setMessage(null);
+
+    try {
+      const result = await sendUserPasswordReset(detail.user.id);
+      setMessage(result.message);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to send password reset email.");
+    } finally {
       setActionState(null);
     }
   }
@@ -172,6 +200,14 @@ export function AdminUserDetailPage() {
         <h2 className="text-lg font-semibold text-[#243042]">User Controls</h2>
         <p className="mt-1 text-sm text-slate-500">Manually suspend/unsuspend or permanently delete the account.</p>
         <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            className="rounded-md bg-slate-700 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
+            disabled={actionState !== null || !detail.user.email}
+            onClick={() => void handleSendPasswordReset()}
+            type="button"
+          >
+            {actionState === "reset" ? "Sending..." : "Send Password Reset"}
+          </button>
           <button
             className={`rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-60 ${
               detail.user.isSuspended ? "bg-emerald-600 hover:bg-emerald-700" : "bg-amber-600 hover:bg-amber-700"

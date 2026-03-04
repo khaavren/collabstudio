@@ -1,6 +1,6 @@
 import { requireAdmin } from "../_lib/auth.js";
 import { HttpError, getJsonBody, sendJson } from "../_lib/http.js";
-import { getSupabaseAdminClient } from "../_lib/supabase.js";
+import { getSupabaseAdminClient, getSupabaseServerAuthClient } from "../_lib/supabase.js";
 
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_PAGE_SIZE = 200;
@@ -44,6 +44,7 @@ function parsePathInfo(req) {
     if (!userId) return { resource: "users" };
     if (leaf === "suspend") return { resource: "user_suspend", userId };
     if (leaf === "delete") return { resource: "user_delete", userId };
+    if (leaf === "reset-password") return { resource: "user_reset_password", userId };
     return { resource: "user", userId };
   }
 
@@ -116,6 +117,15 @@ function parseDateEpoch(value) {
 function isFutureDate(value) {
   const timestamp = parseDateEpoch(value);
   return timestamp !== null && timestamp > Date.now();
+}
+
+function getRequestOrigin(req) {
+  const host = String(req.headers["x-forwarded-host"] ?? req.headers.host ?? "").trim();
+  if (!host) return null;
+
+  const forwardedProto = String(req.headers["x-forwarded-proto"] ?? "").trim().toLowerCase();
+  const protocol = forwardedProto === "https" || forwardedProto === "http" ? forwardedProto : "https";
+  return `${protocol}://${host}`;
 }
 
 function toDisplayNameFromEmail(email) {
@@ -1493,6 +1503,74 @@ async function handleUserDelete(req, res, context, userId) {
   });
 }
 
+async function handleUserResetPassword(req, res, context, userId) {
+  if (req.method !== "POST") {
+    res.setHeader("Allow", "POST");
+    sendJson(res, 405, { error: "Method not allowed." });
+    return;
+  }
+
+  if (!isUuid(userId)) {
+    sendJson(res, 400, { error: "User id is invalid." });
+    return;
+  }
+
+  const { data: targetUserData, error: targetUserError } = await context.adminClient.auth.admin.getUserById(userId);
+  if (targetUserError) {
+    if (Number(targetUserError.status ?? 0) === 404) {
+      sendJson(res, 404, { error: "User not found." });
+      return;
+    }
+    throw new HttpError(targetUserError.message ?? "Unable to load user.", 500);
+  }
+
+  const targetUser = targetUserData?.user ?? null;
+  const targetEmail = nonEmpty(targetUser?.email);
+  if (!targetUser || !targetEmail) {
+    sendJson(res, 400, { error: "Target user does not have an email login." });
+    return;
+  }
+
+  const origin = getRequestOrigin(req);
+  if (!origin) {
+    throw new HttpError("Unable to resolve request origin.", 500);
+  }
+
+  const authClient = getSupabaseServerAuthClient();
+  const { error } = await authClient.auth.resetPasswordForEmail(targetEmail, {
+    redirectTo: `${origin}/reset-password`
+  });
+
+  if (error) {
+    const message = String(error.message ?? "").toLowerCase();
+    const code = String(error.code ?? "");
+    const status = Number(error.status ?? 0);
+    const isRateLimited =
+      status === 429 || code === "over_email_send_rate_limit" || message.includes("rate limit");
+
+    if (isRateLimited) {
+      throw new HttpError("Too many reset attempts. Please wait 60 minutes and try once.", 429);
+    }
+
+    throw new HttpError("Unable to send reset email at the moment.", 500);
+  }
+
+  await recordAuditEvent(context, {
+    organizationId: context.organizationId,
+    action: "user.password_reset_requested",
+    targetType: "user",
+    targetId: userId,
+    metadata: {
+      userEmail: targetEmail
+    }
+  });
+
+  sendJson(res, 200, {
+    ok: true,
+    message: `Password reset email sent to ${targetEmail}.`
+  });
+}
+
 async function handleAuditList(req, res, context) {
   if (req.method !== "GET") {
     res.setHeader("Allow", "GET");
@@ -1683,6 +1761,11 @@ export default async function handler(req, res) {
 
     if (resource === "user_delete") {
       await handleUserDelete(req, res, context, userId);
+      return;
+    }
+
+    if (resource === "user_reset_password") {
+      await handleUserResetPassword(req, res, context, userId);
       return;
     }
 

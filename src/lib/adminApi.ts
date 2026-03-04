@@ -448,6 +448,16 @@ export async function deleteUserAccount(userId: string) {
   );
 }
 
+export async function sendUserPasswordReset(userId: string) {
+  return requestJson<{ ok: boolean; message: string }>(
+    `/api/admin/users/${userId}/reset-password`,
+    {
+      method: "POST"
+    },
+    "Unable to send password reset email."
+  );
+}
+
 export async function listAuditEvents(params: {
   q?: string;
   orgId?: string;

@@ -53,6 +53,10 @@
       "dest": "/api/admin/console.js?resource=user_delete&userId=$1"
     },
     {
+      "src": "/api/admin/users/([^/]+)/reset-password",
+      "dest": "/api/admin/console.js?resource=user_reset_password&userId=$1"
+    },
+    {
       "src": "/api/admin/users/([^/]+)",
       "dest": "/api/admin/console.js?resource=user&userId=$1"
     },
