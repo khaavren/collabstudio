@@ -101,6 +101,21 @@ function parseBoolean(value) {
   return null;
 }
 
+function parseEmail(value) {
+  const text = String(value ?? "")
+    .trim()
+    .toLowerCase();
+  if (!text) return null;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text)) return null;
+  return text;
+}
+
+function parsePassword(value) {
+  const password = String(value ?? "").trim();
+  if (password.length < 8 || password.length > 256) return null;
+  return password;
+}
+
 function isUuid(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     String(value ?? "")
@@ -1101,9 +1116,86 @@ async function handleCustomerDetail(req, res, context, orgId) {
 }
 
 async function handleUsersList(req, res, context) {
-  if (req.method !== "GET") {
-    res.setHeader("Allow", "GET");
+  if (req.method !== "GET" && req.method !== "POST") {
+    res.setHeader("Allow", "GET, POST");
     sendJson(res, 405, { error: "Method not allowed." });
+    return;
+  }
+
+  if (req.method === "POST") {
+    const body = (await getJsonBody(req)) ?? {};
+    const email = parseEmail(body.email);
+    const password = parsePassword(body.password);
+    const displayName = nonEmpty(body.displayName) ?? nonEmpty(body.name) ?? null;
+
+    if (!email) {
+      sendJson(res, 400, { error: "A valid email address is required." });
+      return;
+    }
+
+    if (!displayName) {
+      sendJson(res, 400, { error: "Display name is required." });
+      return;
+    }
+
+    if (!password) {
+      sendJson(res, 400, { error: "Password must be 8-256 characters." });
+      return;
+    }
+
+    const { data, error } = await context.adminClient.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: {
+        full_name: displayName,
+        name: displayName,
+        display_name: displayName
+      }
+    });
+
+    if (error) {
+      const message = String(error.message ?? "").toLowerCase();
+      const duplicateEmail =
+        message.includes("already been registered") ||
+        message.includes("already registered") ||
+        message.includes("already exists") ||
+        message.includes("duplicate");
+
+      if (duplicateEmail) {
+        sendJson(res, 409, { error: "A user with that email already exists." });
+        return;
+      }
+
+      throw new HttpError(error.message || "Unable to create user.", 500);
+    }
+
+    const createdUser = data?.user ?? null;
+    if (!createdUser) {
+      throw new HttpError("Unable to create user.", 500);
+    }
+
+    await recordAuditEvent(context, {
+      organizationId: context.organizationId,
+      action: "user.created",
+      targetType: "user",
+      targetId: createdUser.id,
+      metadata: {
+        userEmail: createdUser.email ?? email,
+        displayName
+      }
+    });
+
+    sendJson(res, 201, {
+      ok: true,
+      message: `User ${createdUser.email ?? email} created.`,
+      user: {
+        id: createdUser.id,
+        email: createdUser.email ?? email,
+        displayName: getUserDisplayName(createdUser),
+        createdAt: createdUser.created_at ?? new Date().toISOString()
+      }
+    });
     return;
   }
 

@@ -209,6 +209,13 @@ export type UserDetail = {
   recentActivityAt: string | null;
 };
 
+export type CreatedUser = {
+  id: string;
+  email: string | null;
+  displayName: string;
+  createdAt: string | null;
+};
+
 export type AuditEvent = {
   id: string;
   organization_id: string | null;
@@ -417,6 +424,21 @@ export async function listUsers(params: { q?: string; limit?: number }) {
   );
 
   return payload.users ?? [];
+}
+
+export async function createUserAccount(input: {
+  displayName: string;
+  email: string;
+  password: string;
+}) {
+  return requestJson<{ ok: boolean; message: string; user: CreatedUser }>(
+    "/api/admin/users",
+    {
+      method: "POST",
+      body: JSON.stringify(input)
+    },
+    "Unable to create user."
+  );
 }
 
 export async function getUserDetail(userId: string) {

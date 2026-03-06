@@ -1,10 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState, type ComponentType } from "react";
 import { useLoaderData, useNavigate, useParams } from "react-router-dom";
 import { AssetCard } from "@/components/AssetCard";
-import { AssetDetailView } from "@/components/AssetDetailView";
-import { EditAssetModal } from "@/components/EditAssetModal";
-import { GenerateInlinePanel } from "@/components/GenerateInlinePanel";
-import { GenerateModal } from "@/components/GenerateModal";
 import { PageHeader } from "@/components/PageHeader";
 import { Sidebar } from "@/components/Sidebar";
 import {
@@ -41,6 +37,39 @@ type RoomLoaderData = {
   roomSlug: string;
 };
 
+function lazyComponent<
+  TComponent extends ComponentType<any>,
+  TModule extends Record<string, unknown> = Record<string, unknown>
+>(
+  loader: () => Promise<TModule>,
+  exportName: keyof TModule
+) {
+  return lazy(async () => {
+    const module = await loader();
+
+    return {
+      default: module[exportName] as TComponent
+    };
+  });
+}
+
+const AssetDetailView = lazyComponent<typeof import("@/components/AssetDetailView").AssetDetailView>(
+  () => import("@/components/AssetDetailView"),
+  "AssetDetailView"
+);
+const EditAssetModal = lazyComponent<typeof import("@/components/EditAssetModal").EditAssetModal>(
+  () => import("@/components/EditAssetModal"),
+  "EditAssetModal"
+);
+const GenerateInlinePanel = lazyComponent<typeof import("@/components/GenerateInlinePanel").GenerateInlinePanel>(
+  () => import("@/components/GenerateInlinePanel"),
+  "GenerateInlinePanel"
+);
+const GenerateModal = lazyComponent<typeof import("@/components/GenerateModal").GenerateModal>(
+  () => import("@/components/GenerateModal"),
+  "GenerateModal"
+);
+
 const defaultGenerate: GenerateInput = {
   title: "",
   prompt: "",
@@ -50,6 +79,14 @@ const defaultGenerate: GenerateInput = {
   referenceFile: null,
   generationMode: "auto"
 };
+
+function PanelLoadingState({ label }: { label: string }) {
+  return (
+    <div className="flex min-h-[320px] items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--card)] text-sm text-[var(--muted-foreground)]">
+      {label}
+    </div>
+  );
+}
 
 export function RoomPage() {
   const { roomSlug } = useLoaderData() as RoomLoaderData;
@@ -663,51 +700,53 @@ export function RoomPage() {
         ) : null}
 
         {selectedAsset ? (
-          <AssetDetailView
-            activeVersionId={activeVersionId}
-            annotations={annotations}
-            asset={selectedAsset}
-            comments={comments}
-            onAddComment={handleAddComment}
-            onAssetDelete={handleDeleteAsset}
-            onAssetUpdate={handleAssetUpdate}
-            onBack={() => {
-              setSelectedAssetId(null);
-              setActiveVersionId(null);
-            }}
-            onCreateVariant={(version) => {
-              void handleGenerate({
-                title: selectedAsset.title,
-                prompt: `${version.prompt}\n\nCreate a close variant with subtle improvements.`,
-                style: version.style,
-                size: version.size,
-                notes: version.notes ?? "",
-                referenceFile: null,
-                sourceImageUrl: version.image_url ?? selectedAsset.image_url,
-                generationMode: "force_image"
-              }).catch(() => {
-                // Error banner is already set by handleGenerate.
-              });
-            }}
-            onDeleteVersion={handleDeleteVersion}
-            onRegenerate={(version) => {
-              void handleGenerate({
-                title: selectedAsset.title,
-                prompt: version.prompt,
-                style: version.style,
-                size: version.size,
-                notes: version.notes ?? "",
-                referenceFile: null,
-                sourceImageUrl: version.image_url ?? selectedAsset.image_url,
-                generationMode: "force_image"
-              }).catch(() => {
-                // Error banner is already set by handleGenerate.
-              });
-            }}
-            onSelectVersion={setActiveVersionId}
-            onSendPrompt={handleSendPrompt}
-            versions={versions}
-          />
+          <Suspense fallback={<PanelLoadingState label="Loading project detail..." />}>
+            <AssetDetailView
+              activeVersionId={activeVersionId}
+              annotations={annotations}
+              asset={selectedAsset}
+              comments={comments}
+              onAddComment={handleAddComment}
+              onAssetDelete={handleDeleteAsset}
+              onAssetUpdate={handleAssetUpdate}
+              onBack={() => {
+                setSelectedAssetId(null);
+                setActiveVersionId(null);
+              }}
+              onCreateVariant={(version) => {
+                void handleGenerate({
+                  title: selectedAsset.title,
+                  prompt: `${version.prompt}\n\nCreate a close variant with subtle improvements.`,
+                  style: version.style,
+                  size: version.size,
+                  notes: version.notes ?? "",
+                  referenceFile: null,
+                  sourceImageUrl: version.image_url ?? selectedAsset.image_url,
+                  generationMode: "force_image"
+                }).catch(() => {
+                  // Error banner is already set by handleGenerate.
+                });
+              }}
+              onDeleteVersion={handleDeleteVersion}
+              onRegenerate={(version) => {
+                void handleGenerate({
+                  title: selectedAsset.title,
+                  prompt: version.prompt,
+                  style: version.style,
+                  size: version.size,
+                  notes: version.notes ?? "",
+                  referenceFile: null,
+                  sourceImageUrl: version.image_url ?? selectedAsset.image_url,
+                  generationMode: "force_image"
+                }).catch(() => {
+                  // Error banner is already set by handleGenerate.
+                });
+              }}
+              onSelectVersion={setActiveVersionId}
+              onSendPrompt={handleSendPrompt}
+              versions={versions}
+            />
+          </Suspense>
         ) : (
           <>
             <PageHeader
@@ -727,10 +766,12 @@ export function RoomPage() {
             <main className="min-h-0 flex-1 overflow-y-auto p-6">
               {filteredAssets.length === 0 ? (
                 <div className="flex min-h-[calc(100vh-220px)] items-center justify-center">
-                  <GenerateInlinePanel
-                    initialValues={defaultGenerate}
-                    onGenerate={handleGenerate}
-                  />
+                  <Suspense fallback={<PanelLoadingState label="Loading prompt composer..." />}>
+                    <GenerateInlinePanel
+                      initialValues={defaultGenerate}
+                      onGenerate={handleGenerate}
+                    />
+                  </Suspense>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -753,41 +794,47 @@ export function RoomPage() {
         )}
       </div>
 
-      <GenerateModal
-        initialValues={generatePreset}
-        isOpen={isGenerateOpen}
-        onClose={() => setIsGenerateOpen(false)}
-        onGenerate={handleGenerate}
-      />
+      {isGenerateOpen ? (
+        <Suspense fallback={null}>
+          <GenerateModal
+            initialValues={generatePreset}
+            isOpen={isGenerateOpen}
+            onClose={() => setIsGenerateOpen(false)}
+            onGenerate={handleGenerate}
+          />
+        </Suspense>
+      ) : null}
 
-      <EditAssetModal
-        assetDescription={editingGridAsset?.description}
-        assetTags={editingGridAsset?.tags ?? []}
-        assetTitle={editingGridAsset?.title ?? ""}
-        isOpen={editingGridAsset !== null}
-        onClose={() => setEditingGridAsset(null)}
-        onDelete={() => {
-          if (!editingGridAsset) return;
-          void handleDeleteAsset(editingGridAsset.id).then((ok) => {
-            if (ok) {
-              setEditingGridAsset(null);
-            }
-          });
-        }}
-        onSave={(data) => {
-          if (!editingGridAsset) return;
-          void handleAssetUpdate({
-            id: editingGridAsset.id,
-            title: data.title,
-            tags: data.tags,
-            description: data.description
-          }).then((ok) => {
-            if (ok) {
-              setEditingGridAsset(null);
-            }
-          });
-        }}
-      />
+      {editingGridAsset ? (
+        <Suspense fallback={null}>
+          <EditAssetModal
+            assetDescription={editingGridAsset.description}
+            assetTags={editingGridAsset.tags}
+            assetTitle={editingGridAsset.title}
+            isOpen
+            onClose={() => setEditingGridAsset(null)}
+            onDelete={() => {
+              void handleDeleteAsset(editingGridAsset.id).then((ok) => {
+                if (ok) {
+                  setEditingGridAsset(null);
+                }
+              });
+            }}
+            onSave={(data) => {
+              void handleAssetUpdate({
+                id: editingGridAsset.id,
+                title: data.title,
+                tags: data.tags,
+                description: data.description
+              }).then((ok) => {
+                if (ok) {
+                  setEditingGridAsset(null);
+                }
+              });
+            }}
+          />
+        </Suspense>
+      ) : null}
     </div>
   );
 }
