@@ -7,6 +7,7 @@ type CreateUserModalProps = {
   isSubmitting: boolean;
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onSubmitModeChange: (mode: "create" | "notify") => void;
   setDisplayName: (value: string) => void;
   setEmail: (value: string) => void;
   setPassword: (value: string) => void;
@@ -22,6 +23,7 @@ function CreateUserModal({
   isSubmitting,
   onClose,
   onSubmit,
+  onSubmitModeChange,
   setDisplayName,
   setEmail,
   setPassword,
@@ -41,7 +43,7 @@ function CreateUserModal({
           <div>
             <h2 className="text-xl font-semibold text-[#243042]">Add User</h2>
             <p className="mt-1 text-sm text-slate-500">
-              Create a user account manually with an email login and password.
+              Create a user account manually, or notify the user by email with their login URL and password.
             </p>
           </div>
           <button
@@ -109,9 +111,23 @@ function CreateUserModal({
                 !values.email.trim() ||
                 values.password.trim().length < 8
               }
+              onClick={() => onSubmitModeChange("create")}
               type="submit"
             >
-              {isSubmitting ? "Creating..." : "Create User"}
+              {isSubmitting ? "Saving..." : "Create"}
+            </button>
+            <button
+              className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+              disabled={
+                isSubmitting ||
+                !values.displayName.trim() ||
+                !values.email.trim() ||
+                values.password.trim().length < 8
+              }
+              onClick={() => onSubmitModeChange("notify")}
+              type="submit"
+            >
+              {isSubmitting ? "Saving..." : "Create and Notify"}
             </button>
           </div>
         </form>
@@ -132,6 +148,7 @@ export function AdminUsersPage() {
   const [createPassword, setCreatePassword] = useState("");
   const [createError, setCreateError] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [createMode, setCreateMode] = useState<"create" | "notify">("create");
 
   async function load(nextQuery = query) {
     setLoading(true);
@@ -166,7 +183,8 @@ export function AdminUsersPage() {
       const result = await createUserAccount({
         displayName: createDisplayName.trim(),
         email: createEmail.trim(),
-        password: createPassword
+        password: createPassword,
+        notify: createMode === "notify"
       });
       setCreateDisplayName("");
       setCreateEmail("");
@@ -193,6 +211,7 @@ export function AdminUsersPage() {
           className="rounded-md bg-[#2b66d5] px-4 py-2 text-sm font-semibold text-white hover:bg-[#2458bc]"
           onClick={() => {
             setCreateError(null);
+            setCreateMode("create");
             setIsCreateOpen(true);
           }}
           type="button"
@@ -293,6 +312,7 @@ export function AdminUsersPage() {
             setIsCreateOpen(false);
           }}
           onSubmit={(event) => void handleCreateUser(event)}
+          onSubmitModeChange={setCreateMode}
           setDisplayName={setCreateDisplayName}
           setEmail={setCreateEmail}
           setPassword={setCreatePassword}

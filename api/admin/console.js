@@ -1,4 +1,5 @@
 import { requireAdmin } from "../_lib/auth.js";
+import { canSendAdminEmail, getAdminLoginUrl, sendAdminUserCreatedEmail } from "../_lib/email.js";
 import { HttpError, getJsonBody, sendJson } from "../_lib/http.js";
 import { getSupabaseAdminClient, getSupabaseServerAuthClient } from "../_lib/supabase.js";
 
@@ -1127,6 +1128,7 @@ async function handleUsersList(req, res, context) {
     const email = parseEmail(body.email);
     const password = parsePassword(body.password);
     const displayName = nonEmpty(body.displayName) ?? nonEmpty(body.name) ?? null;
+    const notify = parseBoolean(body.notify) === true;
 
     if (!email) {
       sendJson(res, 400, { error: "A valid email address is required." });
@@ -1141,6 +1143,22 @@ async function handleUsersList(req, res, context) {
     if (!password) {
       sendJson(res, 400, { error: "Password must be 8-256 characters." });
       return;
+    }
+
+    if (notify) {
+      if (!canSendAdminEmail()) {
+        sendJson(res, 400, {
+          error: "Create and Notify is not configured. Set RESEND_API_KEY and ADMIN_EMAIL_FROM."
+        });
+        return;
+      }
+
+      if (!getAdminLoginUrl(req)) {
+        sendJson(res, 400, {
+          error: "Create and Notify is not configured. Set ADMIN_NOTIFY_LOGIN_URL."
+        });
+        return;
+      }
     }
 
     const { data, error } = await context.adminClient.auth.admin.createUser({
@@ -1175,6 +1193,17 @@ async function handleUsersList(req, res, context) {
       throw new HttpError("Unable to create user.", 500);
     }
 
+    let loginUrl = null;
+    if (notify) {
+      const delivery = await sendAdminUserCreatedEmail(req, {
+        displayName,
+        email,
+        password,
+        senderEmail: context.actor.email ?? null
+      });
+      loginUrl = delivery.loginUrl;
+    }
+
     await recordAuditEvent(context, {
       organizationId: context.organizationId,
       action: "user.created",
@@ -1182,13 +1211,20 @@ async function handleUsersList(req, res, context) {
       targetId: createdUser.id,
       metadata: {
         userEmail: createdUser.email ?? email,
-        displayName
+        displayName,
+        notifyRequested: notify,
+        notified: notify,
+        loginUrl
       }
     });
 
     sendJson(res, 201, {
       ok: true,
-      message: `User ${createdUser.email ?? email} created.`,
+      message: notify
+        ? `User ${createdUser.email ?? email} created and notified.`
+        : `User ${createdUser.email ?? email} created.`,
+      notified: notify,
+      loginUrl,
       user: {
         id: createdUser.id,
         email: createdUser.email ?? email,

@@ -24,6 +24,9 @@ VITE_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 SETTINGS_ENCRYPTION_KEY=
 ADMIN_EMAILS=admin1@company.com,admin2@company.com
+RESEND_API_KEY=
+ADMIN_EMAIL_FROM=admin@yourdomain.com
+ADMIN_NOTIFY_LOGIN_URL=https://your-app-domain.com/login
 ```
 
 Notes:
@@ -31,6 +34,8 @@ Notes:
 - `SUPABASE_SERVICE_ROLE_KEY` is server-only. It is used only in `/api/admin/*` routes.
 - `SETTINGS_ENCRYPTION_KEY` is used for AES-256-GCM encryption of model API keys.
 - `ADMIN_EMAILS` controls `/admin` access.
+- `RESEND_API_KEY` and `ADMIN_EMAIL_FROM` enable admin-created account notification emails.
+- `ADMIN_NOTIFY_LOGIN_URL` is the login page URL included in those emails.
 
 ## Supabase Setup
 1. Open Supabase Dashboard -> SQL Editor.

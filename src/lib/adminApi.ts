@@ -430,8 +430,9 @@ export async function createUserAccount(input: {
   displayName: string;
   email: string;
   password: string;
+  notify?: boolean;
 }) {
-  return requestJson<{ ok: boolean; message: string; user: CreatedUser }>(
+  return requestJson<{ ok: boolean; message: string; notified?: boolean; loginUrl?: string | null; user: CreatedUser }>(
     "/api/admin/users",
     {
       method: "POST",
