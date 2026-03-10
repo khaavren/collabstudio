@@ -27,6 +27,7 @@ ADMIN_EMAILS=admin1@company.com,admin2@company.com
 RESEND_API_KEY=
 ADMIN_EMAIL_FROM=admin@yourdomain.com
 ADMIN_NOTIFY_LOGIN_URL=https://your-app-domain.com/login
+APP_BASE_URL=https://your-app-domain.com
 ```
 
 Notes:
@@ -36,6 +37,7 @@ Notes:
 - `ADMIN_EMAILS` controls `/admin` access.
 - `RESEND_API_KEY` and `ADMIN_EMAIL_FROM` enable admin-created account notification emails.
 - `ADMIN_NOTIFY_LOGIN_URL` is the login page URL included in those emails.
+- `APP_BASE_URL` is used to generate workspace invite onboarding/login links.
 
 ## Supabase Setup
 1. Open Supabase Dashboard -> SQL Editor.

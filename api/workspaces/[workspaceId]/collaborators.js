@@ -1,4 +1,5 @@
 import { getAuthenticatedUser } from "../../_lib/auth.js";
+import { canSendAdminEmail, getWorkspaceInviteUrl, sendWorkspaceInviteEmail } from "../../_lib/email.js";
 import { HttpError, allowMethod, getJsonBody, sendJson } from "../../_lib/http.js";
 import { getSupabaseAdminClient } from "../../_lib/supabase.js";
 import { assertWorkspaceAdmin } from "../../_lib/workspaces.js";
@@ -157,6 +158,38 @@ export default async function handler(req, res) {
 
     const adminClient = getSupabaseAdminClient();
     const target = await resolveInviteTarget(adminClient, inviteIdentity);
+
+    if (!canSendAdminEmail()) {
+      sendJson(res, 400, {
+        error: "Workspace invites are not configured. Set RESEND_API_KEY and ADMIN_EMAIL_FROM."
+      });
+      return;
+    }
+
+    const { data: workspaceRow, error: workspaceError } = await adminClient
+      .from("workspaces")
+      .select("id, name")
+      .eq("id", workspaceId)
+      .maybeSingle();
+
+    if (workspaceError) {
+      throw new HttpError(workspaceError.message, 500);
+    }
+
+    const workspaceName = String(workspaceRow?.name ?? "").trim() || "your workspace";
+    if (!getWorkspaceInviteUrl(req, {
+      workspaceId,
+      workspaceName,
+      email: target.email,
+      role,
+      hasAccount: Boolean(target.userId)
+    })) {
+      sendJson(res, 400, {
+        error: "Workspace invites are not configured. Set APP_BASE_URL or provide a valid request host."
+      });
+      return;
+    }
+
     const { error } = await adminClient.from("workspace_collaborators").insert({
       workspace_id: workspaceId,
       email: target.email,
@@ -169,7 +202,24 @@ export default async function handler(req, res) {
       throw new HttpError(error.message, 500);
     }
 
-    sendJson(res, 200, { ok: true });
+    const delivery = await sendWorkspaceInviteEmail(req, {
+      workspaceId,
+      workspaceName,
+      email: target.email,
+      displayName: target.displayName ?? toDisplayName(target.email),
+      role,
+      hasAccount: Boolean(target.userId),
+      senderEmail: user.email ?? null
+    });
+
+    sendJson(res, 200, {
+      ok: true,
+      invitedUserExists: Boolean(target.userId),
+      onboardingUrl: delivery.inviteUrl,
+      message: target.userId
+        ? "Invitation emailed with a login link."
+        : "Invitation emailed with an onboarding link."
+    });
   } catch (error) {
     if (error instanceof HttpError) {
       sendJson(res, error.status, { error: error.message });

@@ -32,6 +32,18 @@ export function canSendAdminEmail() {
   return Boolean(config.apiKey && config.from);
 }
 
+export function getAppOrigin(req) {
+  const configured = nonEmpty(process.env.APP_BASE_URL) ?? null;
+  if (configured) return configured.replace(/\/+$/, "");
+
+  const host = nonEmpty(req.headers["x-forwarded-host"] ?? req.headers.host ?? "");
+  if (!host) return null;
+
+  const forwardedProto = String(req.headers["x-forwarded-proto"] ?? "").trim().toLowerCase();
+  const protocol = forwardedProto === "http" || forwardedProto === "https" ? forwardedProto : "https";
+  return `${protocol}://${host}`;
+}
+
 export function getAdminLoginUrl(req) {
   const configured =
     nonEmpty(process.env.ADMIN_NOTIFY_LOGIN_URL) ??
@@ -40,12 +52,25 @@ export function getAdminLoginUrl(req) {
 
   if (configured) return configured;
 
-  const host = nonEmpty(req.headers["x-forwarded-host"] ?? req.headers.host ?? "");
-  if (!host) return null;
+  const origin = getAppOrigin(req);
+  if (!origin) return null;
+  return `${origin}/login`;
+}
 
-  const forwardedProto = String(req.headers["x-forwarded-proto"] ?? "").trim().toLowerCase();
-  const protocol = forwardedProto === "http" || forwardedProto === "https" ? forwardedProto : "https";
-  return `${protocol}://${host}/login`;
+export function getWorkspaceInviteUrl(req, payload) {
+  const origin = getAppOrigin(req);
+  if (!origin) return null;
+
+  const route = payload.hasAccount ? "/login" : "/signup";
+  const search = new URLSearchParams({
+    invite: "workspace",
+    workspaceId: String(payload.workspaceId ?? ""),
+    workspaceName: String(payload.workspaceName ?? ""),
+    email: String(payload.email ?? "").trim().toLowerCase(),
+    role: String(payload.role ?? "viewer")
+  });
+
+  return `${origin}${route}?${search.toString()}`;
 }
 
 export async function sendAdminUserCreatedEmail(req, payload) {
@@ -127,5 +152,92 @@ export async function sendAdminUserCreatedEmail(req, payload) {
 
   return {
     loginUrl
+  };
+}
+
+export async function sendWorkspaceInviteEmail(req, payload) {
+  const { apiKey, from } = getEmailConfig();
+  if (!apiKey || !from) {
+    throw new HttpError(
+      "Invite email is not configured. Set RESEND_API_KEY and ADMIN_EMAIL_FROM.",
+      400
+    );
+  }
+
+  const inviteUrl = getWorkspaceInviteUrl(req, payload);
+  if (!inviteUrl) {
+    throw new HttpError(
+      "Invite email is not configured. Set APP_BASE_URL or provide a valid request host.",
+      400
+    );
+  }
+
+  const inviteeName = String(payload.displayName ?? "").trim() || "there";
+  const workspaceName = String(payload.workspaceName ?? "").trim() || "your workspace";
+  const roleLabel = String(payload.role ?? "viewer").trim() || "viewer";
+  const loginEmail = String(payload.email ?? "").trim().toLowerCase();
+  const inviterEmail = nonEmpty(payload.senderEmail);
+  const hasAccount = payload.hasAccount === true;
+
+  const subject = `You're invited to ${workspaceName} on MagisterLudi`;
+  const actionLine = hasAccount
+    ? "Sign in to accept your workspace invite."
+    : "Create your account to accept your workspace invite.";
+  const text = [
+    `Hi ${inviteeName},`,
+    "",
+    `You've been invited to collaborate on "${workspaceName}" in MagisterLudi as a ${roleLabel}.`,
+    actionLine,
+    "",
+    `Invite link: ${inviteUrl}`,
+    `Email: ${loginEmail}`,
+    inviterEmail ? `Invited by: ${inviterEmail}` : null
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;line-height:1.5;color:#1f2937">
+      <p>Hi ${escapeHtml(inviteeName)},</p>
+      <p>
+        You've been invited to collaborate on
+        <strong>${escapeHtml(workspaceName)}</strong>
+        in MagisterLudi as a ${escapeHtml(roleLabel)}.
+      </p>
+      <p>${escapeHtml(actionLine)}</p>
+      <p>
+        <a href="${escapeHtml(inviteUrl)}">Open your invitation</a><br />
+        <strong>Email:</strong> ${escapeHtml(loginEmail)}
+      </p>
+      ${inviterEmail ? `<p><strong>Invited by:</strong> ${escapeHtml(inviterEmail)}</p>` : ""}
+    </div>
+  `.trim();
+
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      from,
+      to: [loginEmail],
+      subject,
+      text,
+      html
+    })
+  });
+
+  if (!response.ok) {
+    const responseBody = await response.json().catch(() => ({}));
+    const message =
+      responseBody && typeof responseBody === "object" && "message" in responseBody
+        ? String(responseBody.message ?? "").trim()
+        : "";
+    throw new HttpError(message || "Workspace invite email request failed.", 502);
+  }
+
+  return {
+    inviteUrl
   };
 }

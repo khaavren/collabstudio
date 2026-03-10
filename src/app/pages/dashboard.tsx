@@ -346,23 +346,23 @@ export function Dashboard() {
     setEditingWorkspace(newWorkspace);
   }
 
-  function handleInviteCollaborator(identity: string, role: string) {
+  async function handleInviteCollaborator(identity: string, role: string) {
     if (!activeInvitingWorkspace) return;
-
     const normalizedRole = role === "admin" || role === "editor" || role === "viewer" ? role : "viewer";
-    void (async () => {
-      try {
-        await inviteWorkspaceCollaborator(activeInvitingWorkspace.id, identity, normalizedRole);
-        const data = await fetchWorkspacesForUser({
-          userId: user?.id ?? "",
-          email: user?.email ?? null
-        });
-        setWorkspaces(data);
-        setError(null);
-      } catch (caught) {
-        setError(caught instanceof Error ? caught.message : "Unable to invite collaborator.");
-      }
-    })();
+    try {
+      const result = await inviteWorkspaceCollaborator(activeInvitingWorkspace.id, identity, normalizedRole);
+      const data = await fetchWorkspacesForUser({
+        userId: user?.id ?? "",
+        email: user?.email ?? null
+      });
+      setWorkspaces(data);
+      setError(null);
+      return result?.message;
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "Unable to invite collaborator.";
+      setError(message);
+      throw new Error(message);
+    }
   }
 
   function handleRemoveCollaborator(collaboratorId: string) {

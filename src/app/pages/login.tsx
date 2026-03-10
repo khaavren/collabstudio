@@ -7,6 +7,10 @@ export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { isAuthenticated, login } = useAuth();
+  const searchParams = new URLSearchParams(location.search);
+  const inviteWorkspaceName = searchParams.get("workspaceName");
+  const inviteEmail = searchParams.get("email");
+  const isWorkspaceInvite = searchParams.get("invite") === "workspace";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -42,6 +46,18 @@ export function LoginPage() {
   }, [location.search]);
 
   useEffect(() => {
+    if (!inviteEmail) return;
+    setEmail((current) => current || inviteEmail);
+    if (!isWorkspaceInvite) return;
+    setInfo((current) =>
+      current ??
+      (inviteWorkspaceName
+        ? `Sign in to open your invite to ${inviteWorkspaceName}.`
+        : "Sign in to open your workspace invite.")
+    );
+  }, [inviteEmail, inviteWorkspaceName, isWorkspaceInvite]);
+
+  useEffect(() => {
     if (isAuthenticated) {
       navigate("/", { replace: true });
     }
@@ -69,7 +85,9 @@ export function LoginPage() {
         <div className="w-full max-w-md rounded-xl border border-[var(--border)] bg-[var(--card)] p-6">
           <h1 className="text-2xl font-medium text-[var(--foreground)]">Log In</h1>
           <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-            Continue to your MagisterLudi dashboard.
+            {isWorkspaceInvite && inviteWorkspaceName
+              ? `Sign in to join ${inviteWorkspaceName}.`
+              : "Continue to your MagisterLudi dashboard."}
           </p>
 
           {info ? (
@@ -118,7 +136,10 @@ export function LoginPage() {
 
           <p className="mt-4 text-center text-sm text-[var(--muted-foreground)]">
             Need an account?{" "}
-            <Link className="font-medium text-[var(--foreground)] hover:underline" to="/signup">
+            <Link
+              className="font-medium text-[var(--foreground)] hover:underline"
+              to={`/signup${location.search}`}
+            >
               Sign up
             </Link>
           </p>

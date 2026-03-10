@@ -13,7 +13,7 @@ interface InviteCollaboratorsModalProps {
   workspaceId: string;
   currentCollaborators: Collaborator[];
   onClose: () => void;
-  onInvite: (identity: string, role: string) => void;
+  onInvite: (identity: string, role: string) => Promise<string | void>;
   onRemove: (collaboratorId: string) => void;
   onRoleChange: (collaboratorId: string, newRole: string) => void;
 }
@@ -48,6 +48,7 @@ export function InviteCollaboratorsModal({
   const [identity, setIdentity] = useState("");
   const [role, setRole] = useState<"viewer" | "editor" | "admin">("viewer");
   const [status, setStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     setIdentity("");
@@ -66,7 +67,7 @@ export function InviteCollaboratorsModal({
     [currentCollaborators]
   );
 
-  function handleInvite() {
+  async function handleInvite() {
     const normalizedIdentity = identity.trim().toLowerCase();
     const looksLikeEmail = normalizedIdentity.includes("@");
 
@@ -85,10 +86,20 @@ export function InviteCollaboratorsModal({
       return;
     }
 
-    onInvite(normalizedIdentity, role);
-    setIdentity("");
-    setRole("viewer");
-    setStatus({ type: "success", message: "Invitation sent." });
+    setIsSubmitting(true);
+    try {
+      const message = await onInvite(normalizedIdentity, role);
+      setIdentity("");
+      setRole("viewer");
+      setStatus({ type: "success", message: message ?? "Invitation sent." });
+    } catch (caught) {
+      setStatus({
+        type: "error",
+        message: caught instanceof Error ? caught.message : "Unable to send invitation."
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -134,12 +145,13 @@ export function InviteCollaboratorsModal({
                 <option value="admin">Admin</option>
               </select>
               <button
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--primary)] px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90"
-                onClick={handleInvite}
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--primary)] px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-60"
+                disabled={isSubmitting}
+                onClick={() => void handleInvite()}
                 type="button"
               >
                 <UserPlus className="h-4 w-4" />
-                Send Invitation
+                {isSubmitting ? "Sending..." : "Send Invitation"}
               </button>
             </div>
             <p className="text-xs text-[var(--muted-foreground)]">

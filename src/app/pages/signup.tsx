@@ -1,10 +1,11 @@
 import { FormEvent, useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/app/context/auth-context";
 import { SiteTopNav } from "@/components/SiteTopNav";
 
 export function SignupPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { isAuthenticated, signup } = useAuth();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -17,6 +18,16 @@ export function SignupPage() {
     const normalized = message.toLowerCase();
     return normalized.includes("account created") && normalized.includes("check your email");
   }
+
+  const searchParams = new URLSearchParams(location.search);
+  const inviteWorkspaceName = searchParams.get("workspaceName");
+  const inviteEmail = searchParams.get("email");
+  const isWorkspaceInvite = searchParams.get("invite") === "workspace";
+
+  useEffect(() => {
+    if (!inviteEmail) return;
+    setEmail((current) => current || inviteEmail);
+  }, [inviteEmail]);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -50,9 +61,13 @@ export function SignupPage() {
       <SiteTopNav />
       <main className="flex flex-1 items-center justify-center px-6">
         <div className="w-full max-w-md rounded-xl border border-[var(--border)] bg-[var(--card)] p-6">
-          <h1 className="text-2xl font-medium text-[var(--foreground)]">Create Account</h1>
+          <h1 className="text-2xl font-medium text-[var(--foreground)]">
+            {isWorkspaceInvite ? "Join Workspace" : "Create Account"}
+          </h1>
           <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-            Start collaborating in your AI-powered workspace.
+            {isWorkspaceInvite && inviteWorkspaceName
+              ? `Create your account to join ${inviteWorkspaceName}.`
+              : "Start collaborating in your AI-powered workspace."}
           </p>
 
           {error ? (
@@ -99,7 +114,10 @@ export function SignupPage() {
 
           <p className="mt-4 text-center text-sm text-[var(--muted-foreground)]">
             Already have an account?{" "}
-            <Link className="font-medium text-[var(--foreground)] hover:underline" to="/login">
+            <Link
+              className="font-medium text-[var(--foreground)] hover:underline"
+              to={`/login${location.search}`}
+            >
               Log in
             </Link>
           </p>
