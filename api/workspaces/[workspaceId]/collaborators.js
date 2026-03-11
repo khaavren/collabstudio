@@ -36,6 +36,25 @@ function metadataDisplayName(user) {
   return null;
 }
 
+function candidateValuesForUser(user) {
+  const metadata = user?.user_metadata && typeof user.user_metadata === "object" ? user.user_metadata : {};
+  const email = normalizeText(user?.email);
+  const localPart = email ? email.split("@")[0] : "";
+  const displayName = normalizeText(metadataDisplayName(user));
+  const preferredUsername = normalizeText(metadata.preferred_username);
+  const fullName = normalizeText(metadata.full_name);
+  const name = normalizeText(metadata.name);
+
+  return {
+    displayName,
+    email,
+    fullName,
+    localPart,
+    name,
+    preferredUsername
+  };
+}
+
 async function listAllAuthUsers(adminClient) {
   const users = [];
   let page = 1;
@@ -67,22 +86,27 @@ function resolveByName(users, identity) {
   const normalizedIdentity = normalizeText(identity);
   if (!normalizedIdentity) return null;
 
-  const matched = users.filter((user) => {
-    const candidates = new Set();
-    const email = normalizeText(user.email);
-    if (email) {
-      candidates.add(email);
-      const localPart = email.split("@")[0];
-      if (localPart) candidates.add(localPart);
-    }
+  const scoredMatches = users
+    .map((user) => {
+      const candidates = candidateValuesForUser(user);
+      let score = 0;
 
-    const displayName = normalizeText(metadataDisplayName(user));
-    if (displayName) candidates.add(displayName);
+      if (candidates.preferredUsername === normalizedIdentity) score = Math.max(score, 500);
+      if (candidates.displayName === normalizedIdentity) score = Math.max(score, 400);
+      if (candidates.fullName === normalizedIdentity) score = Math.max(score, 350);
+      if (candidates.name === normalizedIdentity) score = Math.max(score, 325);
+      if (candidates.localPart === normalizedIdentity) score = Math.max(score, 300);
+      if (candidates.email === normalizedIdentity) score = Math.max(score, 250);
 
-    return candidates.has(normalizedIdentity);
-  });
+      return score > 0 ? { score, user } : null;
+    })
+    .filter(Boolean);
 
-  if (matched.length === 0) return null;
+  if (scoredMatches.length === 0) return null;
+
+  const highestScore = Math.max(...scoredMatches.map((entry) => entry.score));
+  const matched = scoredMatches.filter((entry) => entry.score === highestScore).map((entry) => entry.user);
+
   if (matched.length > 1) {
     throw new HttpError(
       "Multiple users match that invite name. Use the user's email address for a unique match.",
@@ -179,6 +203,63 @@ export default async function handler(req, res) {
     })) {
       sendJson(res, 400, {
         error: "Workspace invites are not configured. Set APP_BASE_URL or provide a valid request host."
+      });
+      return;
+    }
+
+    const { data: existingCollaborator, error: existingCollaboratorError } = await adminClient
+      .from("workspace_collaborators")
+      .select("id, role")
+      .eq("workspace_id", workspaceId)
+      .eq("email", target.email)
+      .maybeSingle();
+
+    if (existingCollaboratorError) {
+      throw new HttpError(existingCollaboratorError.message, 500);
+    }
+
+    if (existingCollaborator) {
+      if (existingCollaborator.role !== role) {
+        const { error: updateRoleError } = await adminClient
+          .from("workspace_collaborators")
+          .update({
+            role,
+            user_id: target.userId,
+            display_name: target.displayName ?? toDisplayName(target.email)
+          })
+          .eq("id", existingCollaborator.id);
+
+        if (updateRoleError) {
+          throw new HttpError(updateRoleError.message, 500);
+        }
+      }
+
+      const invitePayload = {
+        workspaceId,
+        workspaceName,
+        email: target.email,
+        displayName: target.displayName ?? toDisplayName(target.email),
+        role,
+        hasAccount: Boolean(target.userId),
+        senderEmail: user.email ?? null
+      };
+      const inviteUrl = getWorkspaceInviteUrl(req, invitePayload);
+      let emailed = false;
+
+      if (canSendAdminEmail()) {
+        await sendWorkspaceInviteEmail(req, invitePayload);
+        emailed = true;
+      }
+
+      sendJson(res, 200, {
+        ok: true,
+        invitedUserExists: Boolean(target.userId),
+        onboardingUrl: inviteUrl,
+        emailed,
+        message:
+          existingCollaborator.role === role
+            ? "This collaborator already has workspace access."
+            : "Collaborator access already existed. Role updated."
       });
       return;
     }
