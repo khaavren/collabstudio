@@ -1,7 +1,7 @@
-import { getAuthenticatedUser } from "../../../_lib/auth.js";
-import { HttpError, allowMethod, getJsonBody, sendJson } from "../../../_lib/http.js";
-import { getSupabaseAdminClient } from "../../../_lib/supabase.js";
-import { assertWorkspaceAdmin } from "../../../_lib/workspaces.js";
+import { getAuthenticatedUser } from "../../_lib/auth.js";
+import { HttpError, allowMethod, getJsonBody, sendJson } from "../../_lib/http.js";
+import { getSupabaseAdminClient } from "../../_lib/supabase.js";
+import { assertWorkspaceAdmin } from "../../_lib/workspaces.js";
 
 function parseRole(value) {
   return value === "admin" || value === "editor" || value === "viewer" ? value : null;
