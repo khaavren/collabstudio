@@ -159,7 +159,7 @@ export async function inviteWorkspaceCollaborator(
 }
 
 export async function removeWorkspaceCollaborator(collaboratorId: string) {
-  await requestJson(
+  return requestJson<{ ok: boolean; message?: string }>(
     `/api/workspaces/collaborators/${collaboratorId}`,
     {
       method: "DELETE"

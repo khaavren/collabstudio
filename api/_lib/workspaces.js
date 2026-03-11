@@ -111,7 +111,7 @@ export async function assertWorkspaceAdmin(user, workspaceId) {
   const email = normalizedEmail(user.email);
   const { data: workspace, error: workspaceError } = await adminClient
     .from("workspaces")
-    .select("id, owner_id")
+    .select("id, owner_id, owner_email")
     .eq("id", workspaceId)
     .maybeSingle();
 
@@ -121,7 +121,7 @@ export async function assertWorkspaceAdmin(user, workspaceId) {
   if (!workspace) {
     throw new HttpError("Workspace not found.", 404);
   }
-  if (workspace.owner_id === user.id) {
+  if (workspace.owner_id === user.id || (email && normalizedEmail(workspace.owner_email) === email)) {
     return workspace;
   }
 

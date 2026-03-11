@@ -86,7 +86,7 @@ async function handleDelete(req, res) {
     throw new HttpError(error.message, 500);
   }
 
-  sendJson(res, 200, { ok: true });
+  sendJson(res, 200, { ok: true, message: "Collaborator removed." });
 }
 
 export default async function handler(req, res) {

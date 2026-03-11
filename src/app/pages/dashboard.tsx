@@ -365,22 +365,23 @@ export function Dashboard() {
     }
   }
 
-  function handleRemoveCollaborator(collaboratorId: string) {
+  async function handleRemoveCollaborator(collaboratorId: string) {
     if (!activeInvitingWorkspace) return;
 
-    void (async () => {
-      try {
-        await removeWorkspaceCollaborator(collaboratorId);
-        const data = await fetchWorkspacesForUser({
-          userId: user?.id ?? "",
-          email: user?.email ?? null
-        });
-        setWorkspaces(data);
-        setError(null);
-      } catch (caught) {
-        setError(caught instanceof Error ? caught.message : "Unable to remove collaborator.");
-      }
-    })();
+    try {
+      const result = await removeWorkspaceCollaborator(collaboratorId);
+      const data = await fetchWorkspacesForUser({
+        userId: user?.id ?? "",
+        email: user?.email ?? null
+      });
+      setWorkspaces(data);
+      setError(null);
+      return result?.message;
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "Unable to remove collaborator.";
+      setError(message);
+      throw new Error(message);
+    }
   }
 
   function handleRoleChange(collaboratorId: string, newRole: string) {

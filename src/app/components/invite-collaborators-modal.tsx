@@ -14,7 +14,7 @@ interface InviteCollaboratorsModalProps {
   currentCollaborators: Collaborator[];
   onClose: () => void;
   onInvite: (identity: string, role: string) => Promise<string | void>;
-  onRemove: (collaboratorId: string) => void;
+  onRemove: (collaboratorId: string) => Promise<string | void>;
   onRoleChange: (collaboratorId: string, newRole: string) => void;
 }
 
@@ -234,8 +234,27 @@ export function InviteCollaboratorsModal({
 
                     {collaborator.role !== "owner" ? (
                       <button
-                        className="rounded-md p-1.5 text-red-600 transition hover:bg-red-600/10"
-                        onClick={() => onRemove(collaborator.id)}
+                        className="rounded-md p-1.5 text-red-600 transition hover:bg-red-600/10 disabled:opacity-60"
+                        disabled={isSubmitting}
+                        onClick={() => {
+                          setIsSubmitting(true);
+                          void onRemove(collaborator.id)
+                            .then((message) => {
+                              setStatus({ type: "success", message: message ?? "Collaborator removed." });
+                            })
+                            .catch((caught) => {
+                              setStatus({
+                                type: "error",
+                                message:
+                                  caught instanceof Error
+                                    ? caught.message
+                                    : "Unable to remove collaborator."
+                              });
+                            })
+                            .finally(() => {
+                              setIsSubmitting(false);
+                            });
+                        }}
                         title="Remove collaborator"
                         type="button"
                       >
