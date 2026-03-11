@@ -594,12 +594,17 @@ export function AssetDetailView({
     const trimmed = promptInput.trim();
     if (!trimmed || isSendingPrompt) return;
 
+    const pendingReferenceFile = promptReferenceFile;
     setIsSendingPrompt(true);
+    setPromptInput("");
+    setPromptReferenceFile(null);
     scrollConversationToBottom("smooth");
     try {
-      await onSendPrompt(trimmed, promptReferenceFile, promptModel || null);
-      setPromptInput("");
-      setPromptReferenceFile(null);
+      await onSendPrompt(trimmed, pendingReferenceFile, promptModel || null);
+    } catch (error) {
+      setPromptInput(trimmed);
+      setPromptReferenceFile(pendingReferenceFile);
+      throw error;
     } finally {
       setIsSendingPrompt(false);
     }
