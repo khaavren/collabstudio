@@ -110,7 +110,7 @@ function PromptMessage({ message }: { message: Extract<ConversationMessage, { ty
           <span className="text-xs text-[var(--muted-foreground)]">{message.timestamp}</span>
         </div>
 
-        <div className="max-w-3xl rounded-2xl rounded-tl-sm bg-[color-mix(in_srgb,var(--accent)_70%,white)] px-4 py-3">
+        <div className="max-w-4xl rounded-2xl rounded-tl-sm bg-[color-mix(in_srgb,var(--accent)_70%,white)] px-4 py-3 2xl:max-w-5xl">
           <p className="text-sm leading-relaxed text-[var(--foreground)]">{message.content}</p>
           {message.outputType === "image" ? (
             <div className="mt-2 flex gap-4 border-t border-[var(--border)] pt-2 text-xs text-[var(--muted-foreground)]">
@@ -162,7 +162,7 @@ function GenerationMessage({
         {isImageResponse ? (
           <>
             {message.responseText ? (
-              <div className="max-w-2xl rounded-xl border border-[var(--border)] bg-[var(--card)] px-4 py-3 text-sm text-[var(--foreground)]">
+              <div className="max-w-4xl rounded-xl border border-[var(--border)] bg-[var(--card)] px-4 py-3 text-sm text-[var(--foreground)] 2xl:max-w-5xl">
                 <ReactMarkdown
                   components={{
                     h1: ({ children }) => <h3 className="mb-2 mt-1 text-base font-semibold">{children}</h3>,
@@ -194,7 +194,7 @@ function GenerationMessage({
               </div>
             ) : null}
             <button
-              className="group relative block w-full max-w-2xl overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--muted)] text-left"
+              className="group relative block w-full max-w-4xl overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--muted)] text-left 2xl:max-w-5xl"
               onClick={() => {
                 if (message.imageUrl) {
                   onImageClick(message.imageUrl);
@@ -253,7 +253,7 @@ function GenerationMessage({
             </div>
           </>
         ) : (
-          <div className="max-w-2xl rounded-xl border border-[var(--border)] bg-[var(--card)] px-4 py-3 text-sm text-[var(--foreground)]">
+          <div className="max-w-4xl rounded-xl border border-[var(--border)] bg-[var(--card)] px-4 py-3 text-sm text-[var(--foreground)] 2xl:max-w-5xl">
             <ReactMarkdown
               components={{
                 h1: ({ children }) => <h3 className="mb-2 mt-1 text-base font-semibold">{children}</h3>,
@@ -336,7 +336,7 @@ function PromptInputBar({
 
   return (
     <div className="shrink-0 border-t border-[var(--border)] bg-[var(--card)] p-4">
-      <div className="mx-auto flex max-w-4xl items-end gap-3">
+      <div className="mx-auto flex w-full max-w-5xl items-end gap-3 2xl:max-w-6xl">
         <div className="relative flex-1">
           <div className="mb-2 flex items-center justify-between gap-2">
             <label className="flex items-center gap-2 text-xs text-[var(--muted-foreground)]">
@@ -470,7 +470,7 @@ function ThinkingMessage() {
         <div className="flex items-baseline gap-2">
           <span className="text-sm font-medium text-[var(--foreground)]">AI Assistant</span>
         </div>
-        <div className="max-w-2xl rounded-xl border border-[var(--border)] bg-[var(--card)] px-4 py-3 text-sm text-[var(--muted-foreground)]">
+        <div className="max-w-4xl rounded-xl border border-[var(--border)] bg-[var(--card)] px-4 py-3 text-sm text-[var(--muted-foreground)] 2xl:max-w-5xl">
           Thinking...
         </div>
       </div>
@@ -687,8 +687,8 @@ export function AssetDetailView({
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <div className="flex min-w-0 flex-1 flex-col">
-          <div className="flex-1 overflow-y-auto p-6">
-            <div className="space-y-6">
+          <div className="flex-1 overflow-y-auto px-6 py-6 xl:px-8 2xl:px-10">
+            <div className="mx-auto w-full max-w-6xl space-y-6 2xl:max-w-7xl">
               {conversationThread.map((message) =>
                 message.type === "prompt" ? (
                   <PromptMessage key={message.id} message={message} />
@@ -727,7 +727,7 @@ export function AssetDetailView({
           />
         </div>
 
-        <aside className="w-80 shrink-0 border-l border-[var(--border)] bg-[var(--card)]">
+        <aside className="w-80 shrink-0 border-l border-[var(--border)] bg-[var(--card)] xl:w-[22rem] 2xl:w-96">
           <div className="flex h-full flex-col overflow-y-auto">
             <section className="border-b border-[var(--border)] p-4">
               <h3 className="mb-3 text-sm font-medium text-[var(--foreground)]">Version Quick Nav</h3>
