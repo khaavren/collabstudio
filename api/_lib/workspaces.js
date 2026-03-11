@@ -129,18 +129,21 @@ export async function assertWorkspaceAdmin(user, workspaceId) {
     ? `user_id.eq.${user.id},email.eq.${email}`
     : `user_id.eq.${user.id}`;
 
-  const { data: membership, error: membershipError } = await adminClient
+  const { data: memberships, error: membershipError } = await adminClient
     .from("workspace_collaborators")
     .select("id, role")
     .eq("workspace_id", workspaceId)
-    .or(membershipFilter)
-    .limit(1)
-    .maybeSingle();
+    .or(membershipFilter);
 
   if (membershipError) {
     throw new HttpError(membershipError.message, 500);
   }
-  if (!membership || (membership.role !== "owner" && membership.role !== "admin")) {
+
+  const hasAdminAccess = (memberships ?? []).some(
+    (membership) => membership.role === "owner" || membership.role === "admin"
+  );
+
+  if (!hasAdminAccess) {
     throw new HttpError("Not authorized.", 403);
   }
 
