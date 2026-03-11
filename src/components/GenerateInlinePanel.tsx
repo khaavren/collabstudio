@@ -1,4 +1,4 @@
-import { Upload, X } from "lucide-react";
+import { LoaderCircle, Upload, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { GenerateInput } from "@/lib/types";
 
@@ -27,6 +27,10 @@ export function GenerateInlinePanel({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const imageModeEnabled = form.generationMode === "force_image";
+  const progressTitle = imageModeEnabled ? "Generating concept..." : "Thinking through your prompt...";
+  const progressCopy = imageModeEnabled
+    ? "This can take a bit. The project will open as soon as the render is ready."
+    : "This can take a bit. The conversation will open as soon as the response is ready.";
 
   useEffect(() => {
     setForm({
@@ -84,6 +88,7 @@ export function GenerateInlinePanel({
           Project title
           <input
             className="mt-1 w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm outline-none"
+            disabled={isSubmitting}
             onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
             placeholder="Enter project title"
             value={form.title}
@@ -94,6 +99,7 @@ export function GenerateInlinePanel({
           Prompt
           <textarea
             className="mt-1 min-h-28 w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm outline-none"
+            disabled={isSubmitting}
             onChange={(event) => setForm((current) => ({ ...current, prompt: event.target.value }))}
             placeholder="Ask a question or describe a concept"
             rows={4}
@@ -105,10 +111,21 @@ export function GenerateInlinePanel({
           <p className="text-sm text-red-600">{submitError}</p>
         ) : null}
 
+        {isSubmitting ? (
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--background)] px-4 py-3">
+            <div className="flex items-center gap-2 text-sm font-medium text-[var(--foreground)]">
+              <LoaderCircle className="h-4 w-4 animate-spin text-[var(--primary)]" />
+              {progressTitle}
+            </div>
+            <p className="mt-1 text-sm text-[var(--muted-foreground)]">{progressCopy}</p>
+          </div>
+        ) : null}
+
         <label className="block text-sm text-[var(--foreground)]">
           Response Mode
           <select
             className="mt-1 w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm outline-none"
+            disabled={isSubmitting}
             onChange={(event) =>
               setForm((current) => ({
                 ...current,
@@ -128,6 +145,7 @@ export function GenerateInlinePanel({
               Notes (optional)
               <input
                 className="mt-1 w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm outline-none"
+                disabled={isSubmitting}
                 onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))}
                 placeholder="Add optional notes"
                 value={form.notes}
@@ -140,6 +158,7 @@ export function GenerateInlinePanel({
               <input
                 accept="image/*"
                 className="hidden"
+                disabled={isSubmitting}
                 onChange={(event) =>
                   setForm((current) => ({ ...current, referenceFile: event.target.files?.[0] ?? null }))
                 }
@@ -164,7 +183,7 @@ export function GenerateInlinePanel({
             disabled={isSubmitting || (!form.prompt.trim() && !form.title.trim())}
             type="submit"
           >
-            {isSubmitting ? "Sending..." : imageModeEnabled ? "Generate" : "Start"}
+            {isSubmitting ? (imageModeEnabled ? "Generating..." : "Thinking...") : imageModeEnabled ? "Generate" : "Start"}
           </button>
         </div>
       </form>
