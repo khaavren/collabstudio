@@ -505,6 +505,10 @@ export function AssetDetailView({
   const generationRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const previousMessageCountRef = useRef(0);
 
+  function scrollConversationToBottom(behavior: ScrollBehavior = "smooth") {
+    conversationBottomRef.current?.scrollIntoView({ behavior, block: "end" });
+  }
+
   const chronologicalVersions = useMemo(
     () =>
       [...versions].sort(
@@ -562,12 +566,18 @@ export function AssetDetailView({
     const nextCount = conversationThread.length;
     const previousCount = previousMessageCountRef.current;
 
-    if (nextCount > previousCount && conversationBottomRef.current) {
-      conversationBottomRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
+    if (nextCount > previousCount) {
+      scrollConversationToBottom("smooth");
     }
 
     previousMessageCountRef.current = nextCount;
   }, [conversationThread.length]);
+
+  useEffect(() => {
+    if (isSendingPrompt) {
+      scrollConversationToBottom("smooth");
+    }
+  }, [isSendingPrompt]);
 
   useEffect(() => {
     const stored = window.localStorage.getItem("conversation_model");
@@ -585,6 +595,7 @@ export function AssetDetailView({
     if (!trimmed || isSendingPrompt) return;
 
     setIsSendingPrompt(true);
+    scrollConversationToBottom("smooth");
     try {
       await onSendPrompt(trimmed, promptReferenceFile, promptModel || null);
       setPromptInput("");
