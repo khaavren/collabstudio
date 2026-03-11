@@ -1,4 +1,4 @@
-import { ArrowLeft, Grid2x2, LogOut, Pencil, Plus } from "lucide-react";
+import { ArrowLeft, Grid2x2, LogOut, Pencil, Plus, Users } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/app/context/auth-context";
@@ -7,6 +7,7 @@ import type { Room } from "@/lib/types";
 
 type SidebarProps = {
   activeSlug: string;
+  onManageCollaborators?: () => void;
   onCreateRoom: () => void;
   onDeleteRoom: (room: Room) => Promise<boolean> | boolean;
   onRenameRoom: (room: Room, name: string) => Promise<boolean> | boolean;
@@ -19,6 +20,7 @@ type SidebarProps = {
 
 export function Sidebar({
   activeSlug,
+  onManageCollaborators,
   onCreateRoom,
   onDeleteRoom,
   onRenameRoom,
@@ -116,6 +118,16 @@ export function Sidebar({
         </nav>
 
         <div className="border-t border-[var(--border)] px-4 py-3">
+          {onManageCollaborators ? (
+            <button
+              className="mb-2 inline-flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-[var(--muted-foreground)] transition hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
+              onClick={onManageCollaborators}
+              type="button"
+            >
+              <Users className="h-3.5 w-3.5" />
+              Invite Collaborators
+            </button>
+          ) : null}
           <a
             className="mb-2 block rounded-lg px-2 py-1 text-xs text-[var(--muted-foreground)] transition hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
             href="/settings/profile"

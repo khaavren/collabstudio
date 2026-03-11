@@ -201,3 +201,17 @@ export async function fetchWorkspaceNameById(workspaceId: string | null | undefi
 
   return payload.workspace?.name ?? null;
 }
+
+export async function fetchWorkspaceById(workspaceId: string | null | undefined) {
+  if (!workspaceId) return null;
+
+  const payload = await requestJson<{ workspace: WorkspaceApiRecord }>(
+    `/api/workspaces/${workspaceId}`,
+    {
+      method: "GET"
+    },
+    "Unable to load workspace."
+  );
+
+  return payload.workspace ?? null;
+}

@@ -21,7 +21,12 @@ import {
   updateRoomName,
   updateAssetMetadata
 } from "@/lib/supabase";
-import { fetchWorkspaceNameById } from "@/lib/workspaces";
+import {
+  fetchWorkspaceById,
+  inviteWorkspaceCollaborator,
+  removeWorkspaceCollaborator,
+  updateWorkspaceCollaboratorRole
+} from "@/lib/workspaces";
 import { slugify } from "@/lib/utils";
 import type {
   Annotation,
@@ -69,6 +74,12 @@ const GenerateModal = lazyComponent<typeof import("@/components/GenerateModal").
   () => import("@/components/GenerateModal"),
   "GenerateModal"
 );
+const InviteCollaboratorsModal = lazyComponent<
+  typeof import("@/app/components/invite-collaborators-modal").InviteCollaboratorsModal
+>(
+  () => import("@/app/components/invite-collaborators-modal"),
+  "InviteCollaboratorsModal"
+);
 
 const defaultGenerate: GenerateInput = {
   title: "",
@@ -109,6 +120,15 @@ export function RoomPage() {
   const [generatePreset, setGeneratePreset] = useState<GenerateInput>(defaultGenerate);
   const [editingGridAsset, setEditingGridAsset] = useState<AssetWithTags | null>(null);
   const [currentActor, setCurrentActor] = useState<ActorProfile | null>(null);
+  const [workspaceCollaborators, setWorkspaceCollaborators] = useState<
+    Array<{
+      id: string;
+      name: string;
+      email: string;
+      role: "owner" | "admin" | "editor" | "viewer";
+    }>
+  >([]);
+  const [isInviteOpen, setIsInviteOpen] = useState(false);
 
   const activeRoomSlug = params.roomId ?? roomSlug;
 
@@ -183,19 +203,21 @@ export function RoomPage() {
   useEffect(() => {
     let active = true;
 
-    async function loadWorkspaceName() {
+    async function loadWorkspaceContext() {
       if (!activeWorkspaceId) {
         if (!active) return;
         setWorkspaceName("Workspace");
+        setWorkspaceCollaborators([]);
         return;
       }
 
-      const name = await fetchWorkspaceNameById(activeWorkspaceId);
+      const workspace = await fetchWorkspaceById(activeWorkspaceId);
       if (!active) return;
-      setWorkspaceName(name ?? "Workspace");
+      setWorkspaceName(workspace?.name ?? "Workspace");
+      setWorkspaceCollaborators(workspace?.collaboratorsList ?? []);
     }
 
-    void loadWorkspaceName();
+    void loadWorkspaceContext();
     return () => {
       active = false;
     };
@@ -665,6 +687,62 @@ export function RoomPage() {
     }
   }
 
+  async function refreshWorkspaceCollaborators() {
+    if (!activeWorkspaceId) return;
+    const workspace = await fetchWorkspaceById(activeWorkspaceId);
+    setWorkspaceName(workspace?.name ?? "Workspace");
+    setWorkspaceCollaborators(workspace?.collaboratorsList ?? []);
+  }
+
+  async function handleInviteCollaborator(identity: string, role: string) {
+    if (!activeWorkspaceId) return;
+    const normalizedRole = role === "admin" || role === "editor" || role === "viewer" ? role : "viewer";
+
+    try {
+      const result = await inviteWorkspaceCollaborator(activeWorkspaceId, identity, normalizedRole);
+      await refreshWorkspaceCollaborators();
+      setError(null);
+      return result
+        ? {
+            message: result.message,
+            inviteUrl: result.onboardingUrl ?? null,
+            emailed: result.emailed === true
+          }
+        : undefined;
+    } catch (caughtError) {
+      const message = caughtError instanceof Error ? caughtError.message : "Unable to invite collaborator.";
+      setError(message);
+      throw new Error(message);
+    }
+  }
+
+  async function handleRemoveCollaborator(collaboratorId: string) {
+    try {
+      const result = await removeWorkspaceCollaborator(collaboratorId);
+      await refreshWorkspaceCollaborators();
+      setError(null);
+      return result?.message;
+    } catch (caughtError) {
+      const message = caughtError instanceof Error ? caughtError.message : "Unable to remove collaborator.";
+      setError(message);
+      throw new Error(message);
+    }
+  }
+
+  function handleRoleChange(collaboratorId: string, newRole: string) {
+    if (newRole !== "admin" && newRole !== "editor" && newRole !== "viewer") return;
+
+    void (async () => {
+      try {
+        await updateWorkspaceCollaboratorRole(collaboratorId, newRole);
+        await refreshWorkspaceCollaborators();
+        setError(null);
+      } catch (caughtError) {
+        setError(caughtError instanceof Error ? caughtError.message : "Unable to update role.");
+      }
+    })();
+  }
+
   if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center text-sm text-[var(--muted-foreground)]">
@@ -677,6 +755,7 @@ export function RoomPage() {
     <div className="flex h-screen bg-[var(--background)] text-[var(--foreground)]">
       <Sidebar
         activeSlug={activeRoomSlug}
+        onManageCollaborators={activeWorkspaceId ? () => setIsInviteOpen(true) : undefined}
         onCreateRoom={handleCreateRoom}
         onDeleteRoom={handleDeleteRoom}
         onRenameRoom={handleRenameRoom}
@@ -832,6 +911,20 @@ export function RoomPage() {
                 }
               });
             }}
+          />
+        </Suspense>
+      ) : null}
+
+      {activeWorkspaceId && isInviteOpen ? (
+        <Suspense fallback={null}>
+          <InviteCollaboratorsModal
+            currentCollaborators={workspaceCollaborators}
+            onClose={() => setIsInviteOpen(false)}
+            onInvite={handleInviteCollaborator}
+            onRemove={handleRemoveCollaborator}
+            onRoleChange={handleRoleChange}
+            workspaceId={activeWorkspaceId}
+            workspaceName={workspaceName}
           />
         </Suspense>
       ) : null}
