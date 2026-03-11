@@ -357,7 +357,13 @@ export function Dashboard() {
       });
       setWorkspaces(data);
       setError(null);
-      return result?.message;
+      return result
+        ? {
+            message: result.message,
+            inviteUrl: result.onboardingUrl ?? null,
+            emailed: result.emailed === true
+          }
+        : undefined;
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : "Unable to invite collaborator.";
       setError(message);

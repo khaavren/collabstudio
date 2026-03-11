@@ -13,7 +13,10 @@ interface InviteCollaboratorsModalProps {
   workspaceId: string;
   currentCollaborators: Collaborator[];
   onClose: () => void;
-  onInvite: (identity: string, role: string) => Promise<string | void>;
+  onInvite: (
+    identity: string,
+    role: string
+  ) => Promise<{ message?: string; inviteUrl?: string | null; emailed?: boolean } | void>;
   onRemove: (collaboratorId: string) => Promise<string | void>;
   onRoleChange: (collaboratorId: string, newRole: string) => void;
 }
@@ -47,7 +50,12 @@ export function InviteCollaboratorsModal({
 }: InviteCollaboratorsModalProps) {
   const [identity, setIdentity] = useState("");
   const [role, setRole] = useState<"viewer" | "editor" | "admin">("viewer");
-  const [status, setStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [status, setStatus] = useState<{
+    type: "success" | "error";
+    message: string;
+    inviteUrl?: string | null;
+    emailed?: boolean;
+  } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -88,10 +96,15 @@ export function InviteCollaboratorsModal({
 
     setIsSubmitting(true);
     try {
-      const message = await onInvite(normalizedIdentity, role);
+      const result = await onInvite(normalizedIdentity, role);
       setIdentity("");
       setRole("viewer");
-      setStatus({ type: "success", message: message ?? "Invitation sent." });
+      setStatus({
+        type: "success",
+        message: result?.message ?? "Invitation sent.",
+        inviteUrl: result?.inviteUrl ?? null,
+        emailed: result?.emailed === true
+      });
     } catch (caught) {
       setStatus({
         type: "error",
@@ -158,13 +171,33 @@ export function InviteCollaboratorsModal({
               Teammates can share their invite name from Settings.
             </p>
             {status ? (
-              <p
-                className={`text-sm ${
-                  status.type === "success" ? "text-emerald-600" : "text-red-600"
-                }`}
-              >
-                {status.message}
-              </p>
+              <div className="space-y-2">
+                <p
+                  className={`text-sm ${
+                    status.type === "success" ? "text-emerald-600" : "text-red-600"
+                  }`}
+                >
+                  {status.message}
+                </p>
+                {status.type === "success" && status.inviteUrl && !status.emailed ? (
+                  <div className="flex flex-col gap-2 rounded-lg border border-[var(--border)] bg-[var(--accent)] p-3 md:flex-row md:items-center">
+                    <input
+                      className="min-w-0 flex-1 rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--foreground)]"
+                      readOnly
+                      value={status.inviteUrl}
+                    />
+                    <button
+                      className="rounded-md bg-[var(--primary)] px-3 py-2 text-sm font-medium text-white"
+                      onClick={() => {
+                        void navigator.clipboard.writeText(status.inviteUrl ?? "");
+                      }}
+                      type="button"
+                    >
+                      Copy Link
+                    </button>
+                  </div>
+                ) : null}
+              </div>
             ) : null}
           </section>
 

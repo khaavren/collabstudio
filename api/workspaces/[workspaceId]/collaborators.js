@@ -159,13 +159,6 @@ export default async function handler(req, res) {
     const adminClient = getSupabaseAdminClient();
     const target = await resolveInviteTarget(adminClient, inviteIdentity);
 
-    if (!canSendAdminEmail()) {
-      sendJson(res, 400, {
-        error: "Workspace invites are not configured. Set RESEND_API_KEY and ADMIN_EMAIL_FROM."
-      });
-      return;
-    }
-
     const { data: workspaceRow, error: workspaceError } = await adminClient
       .from("workspaces")
       .select("id, name")
@@ -202,7 +195,7 @@ export default async function handler(req, res) {
       throw new HttpError(error.message, 500);
     }
 
-    const delivery = await sendWorkspaceInviteEmail(req, {
+    const invitePayload = {
       workspaceId,
       workspaceName,
       email: target.email,
@@ -210,15 +203,28 @@ export default async function handler(req, res) {
       role,
       hasAccount: Boolean(target.userId),
       senderEmail: user.email ?? null
-    });
+    };
+
+    const inviteUrl = getWorkspaceInviteUrl(req, invitePayload);
+    let emailed = false;
+
+    if (canSendAdminEmail()) {
+      await sendWorkspaceInviteEmail(req, invitePayload);
+      emailed = true;
+    }
 
     sendJson(res, 200, {
       ok: true,
       invitedUserExists: Boolean(target.userId),
-      onboardingUrl: delivery.inviteUrl,
-      message: target.userId
-        ? "Invitation emailed with a login link."
-        : "Invitation emailed with an onboarding link."
+      onboardingUrl: inviteUrl,
+      emailed,
+      message: emailed
+        ? target.userId
+          ? "Invitation emailed with a login link."
+          : "Invitation emailed with an onboarding link."
+        : target.userId
+          ? "Invitation created. Share the login link with this collaborator."
+          : "Invitation created. Share the onboarding link with this collaborator."
     });
   } catch (error) {
     if (error instanceof HttpError) {

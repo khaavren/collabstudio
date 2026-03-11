@@ -148,7 +148,13 @@ export async function inviteWorkspaceCollaborator(
   identity: string,
   role: CollaboratorRole
 ) {
-  return requestJson<{ ok: boolean; message?: string; invitedUserExists?: boolean; onboardingUrl?: string | null }>(
+  return requestJson<{
+    ok: boolean;
+    message?: string;
+    invitedUserExists?: boolean;
+    onboardingUrl?: string | null;
+    emailed?: boolean;
+  }>(
     `/api/workspaces/${workspaceId}/collaborators`,
     {
       method: "POST",
