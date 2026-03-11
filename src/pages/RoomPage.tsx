@@ -168,6 +168,7 @@ export function RoomPage() {
     );
     return names.size;
   }, [assets]);
+  const visibleCollaboratorCount = activeWorkspaceId ? workspaceCollaborators.length : collaboratorCount;
 
   const loadRoomsData = useCallback(async () => {
     setIsLoading(true);
@@ -755,7 +756,6 @@ export function RoomPage() {
     <div className="flex h-screen bg-[var(--background)] text-[var(--foreground)]">
       <Sidebar
         activeSlug={activeRoomSlug}
-        onManageCollaborators={activeWorkspaceId ? () => setIsInviteOpen(true) : undefined}
         onCreateRoom={handleCreateRoom}
         onDeleteRoom={handleDeleteRoom}
         onRenameRoom={handleRenameRoom}
@@ -829,7 +829,7 @@ export function RoomPage() {
         ) : (
           <>
             <PageHeader
-              collaboratorCount={collaboratorCount}
+              collaboratorCount={visibleCollaboratorCount}
               projectCount={filteredAssets.length}
               filter={filter}
               onFilterChange={setFilter}
@@ -837,6 +837,7 @@ export function RoomPage() {
                 setGeneratePreset(defaultGenerate);
                 setIsGenerateOpen(true);
               }}
+              onManageCollaborators={activeWorkspaceId ? () => setIsInviteOpen(true) : undefined}
               onSearchChange={setSearch}
               roomTitle={activeRoom?.name ?? "Room"}
               searchValue={search}

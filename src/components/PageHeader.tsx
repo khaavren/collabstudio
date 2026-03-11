@@ -7,6 +7,7 @@ type PageHeaderProps = {
   filter: AssetFilter;
   onFilterChange: (value: AssetFilter) => void;
   onGenerate: () => void;
+  onManageCollaborators?: () => void;
   onSearchChange: (value: string) => void;
   roomTitle: string;
   searchValue: string;
@@ -18,6 +19,7 @@ export function PageHeader({
   filter,
   onFilterChange,
   onGenerate,
+  onManageCollaborators,
   onSearchChange,
   roomTitle,
   searchValue
@@ -26,9 +28,23 @@ export function PageHeader({
     <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--card)] px-6 py-4">
       <div>
         <h2 className="text-lg font-medium text-[var(--foreground)]">{roomTitle}</h2>
-        <p className="text-sm text-[var(--muted-foreground)]">
-          {projectCount} projects · {collaboratorCount} collaborators
-        </p>
+        <div className="flex flex-wrap items-center gap-1 text-sm text-[var(--muted-foreground)]">
+          <span>{projectCount} projects</span>
+          <span aria-hidden="true">&middot;</span>
+          <span>{collaboratorCount} collaborators</span>
+          {onManageCollaborators ? (
+            <>
+              <span aria-hidden="true">&middot;</span>
+              <button
+                className="font-medium text-[var(--foreground)] transition hover:text-[var(--primary)]"
+                onClick={onManageCollaborators}
+                type="button"
+              >
+                Invite collaborators
+              </button>
+            </>
+          ) : null}
+        </div>
       </div>
 
       <div className="flex flex-1 items-center justify-end gap-2 max-sm:w-full max-sm:flex-wrap max-sm:justify-start">
