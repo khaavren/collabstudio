@@ -1,4 +1,4 @@
-import { Search } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 import type { AssetFilter } from "@/lib/types";
 
 type PageHeaderProps = {
@@ -36,10 +36,11 @@ export function PageHeader({
             <>
               <span aria-hidden="true">&middot;</span>
               <button
-                className="font-medium text-[var(--foreground)] transition hover:text-[var(--primary)]"
+                className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--background)] px-2.5 py-1 text-xs font-medium text-[var(--foreground)] transition hover:border-[var(--primary)] hover:text-[var(--primary)]"
                 onClick={onManageCollaborators}
                 type="button"
               >
+                <Plus className="h-3.5 w-3.5" />
                 Invite collaborators
               </button>
             </>
