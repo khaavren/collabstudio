@@ -12,6 +12,8 @@ import { hashSeed, placeholderUrl, safeVersionNumber } from "@/lib/utils";
 
 const supabaseUrl = String(import.meta.env.VITE_SUPABASE_URL ?? "").trim();
 const supabaseAnonKey = String(import.meta.env.VITE_SUPABASE_ANON_KEY ?? "").trim();
+const GENERATION_REQUEST_TIMEOUT_MS = 240000;
+const GENERATED_IMAGE_DOWNLOAD_TIMEOUT_MS = 120000;
 
 function isValidSupabaseUrl(value: string) {
   try {
@@ -283,7 +285,7 @@ async function requestGeneratedOutput(
 
   try {
     const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 150000);
+    const timeout = window.setTimeout(() => controller.abort(), GENERATION_REQUEST_TIMEOUT_MS);
     const response = await fetch("/api/generate-image", {
       method: "POST",
       headers: {
@@ -346,7 +348,7 @@ async function requestGeneratedOutput(
     throw new Error("Image generation returned no image URL.");
   } catch (caughtError) {
     if (caughtError instanceof Error && caughtError.name === "AbortError") {
-      throw new Error("Image generation timed out. Please retry (provider response exceeded 150s).");
+      throw new Error("Image generation timed out. Please retry (provider response exceeded 240s).");
     }
     throw new Error(
       caughtError instanceof Error
@@ -449,7 +451,7 @@ async function uploadImageToStorage(
     }
 
     const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 90000);
+    const timeout = window.setTimeout(() => controller.abort(), GENERATED_IMAGE_DOWNLOAD_TIMEOUT_MS);
     const response = await fetch(generatedUrl, { signal: controller.signal })
       .finally(() => {
         window.clearTimeout(timeout);

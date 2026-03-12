@@ -207,6 +207,9 @@ function withTimeout(ms = 30000) {
   };
 }
 
+const OPENAI_IMAGE_TIMEOUT_MS = 180000;
+const OPENAI_TEXT_TIMEOUT_MS = 90000;
+
 function compactErrorText(raw) {
   return String(raw ?? "")
     .replace(/\s+/g, " ")
@@ -573,7 +576,7 @@ async function generateOpenAiImage(options) {
     sourceImage && !shouldAllowFullRedesign(prompt) ? buildEditPrompt(prompt) : prompt;
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    const timeout = withTimeout(60000);
+    const timeout = withTimeout(OPENAI_IMAGE_TIMEOUT_MS);
     try {
       const response = sourceImage
         ? await (async () => {
@@ -659,7 +662,7 @@ async function generateOpenAiText(options) {
   for (let candidateIndex = 0; candidateIndex < modelCandidates.length; candidateIndex += 1) {
     const resolvedModel = modelCandidates[candidateIndex];
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-      const timeout = withTimeout(60000);
+      const timeout = withTimeout(OPENAI_TEXT_TIMEOUT_MS);
       try {
         const response = await fetch("https://api.openai.com/v1/responses", {
           method: "POST",
