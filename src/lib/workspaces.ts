@@ -24,6 +24,13 @@ export type WorkspaceRecord = {
   ownerName: string;
 };
 
+export type WorkspaceUserOption = {
+  id: string;
+  email: string;
+  displayName: string;
+  inviteName: string;
+};
+
 type WorkspaceApiRecord = Omit<WorkspaceRecord, "lastAccessed"> & {
   lastAccessed: string;
 };
@@ -214,4 +221,16 @@ export async function fetchWorkspaceById(workspaceId: string | null | undefined)
   );
 
   return payload.workspace ?? null;
+}
+
+export async function searchWorkspaceUsers(workspaceId: string, query: string, limit = 8) {
+  const payload = await requestJson<{ users: WorkspaceUserOption[] }>(
+    `/api/workspaces/${workspaceId}/users?q=${encodeURIComponent(query)}&limit=${encodeURIComponent(String(limit))}`,
+    {
+      method: "GET"
+    },
+    "Unable to search users."
+  );
+
+  return payload.users ?? [];
 }

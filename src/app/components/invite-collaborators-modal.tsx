@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Mail, Shield, Trash2, UserPlus, X } from "lucide-react";
+import { Check, LoaderCircle, Mail, Shield, Trash2, UserPlus, X } from "lucide-react";
+import { searchWorkspaceUsers, type WorkspaceUserOption } from "@/lib/workspaces";
 
 export interface Collaborator {
   id: string;
@@ -57,11 +58,16 @@ export function InviteCollaboratorsModal({
     emailed?: boolean;
   } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [matchedUsers, setMatchedUsers] = useState<WorkspaceUserOption[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<WorkspaceUserOption | null>(null);
 
   useEffect(() => {
     setIdentity("");
     setRole("viewer");
     setStatus(null);
+    setMatchedUsers([]);
+    setSelectedUser(null);
   }, [workspaceId]);
 
   useEffect(() => {
@@ -74,31 +80,72 @@ export function InviteCollaboratorsModal({
     () => new Set(currentCollaborators.map((collaborator) => collaborator.email.toLowerCase())),
     [currentCollaborators]
   );
+  const normalizedIdentity = identity.trim().toLowerCase();
+  const looksLikeEmail = normalizedIdentity.includes("@");
+
+  useEffect(() => {
+    if (looksLikeEmail || normalizedIdentity.length < 2 || selectedUser) {
+      setMatchedUsers([]);
+      setIsSearching(false);
+      return;
+    }
+
+    let active = true;
+    setIsSearching(true);
+
+    const timer = window.setTimeout(() => {
+      void searchWorkspaceUsers(workspaceId, normalizedIdentity)
+        .then((results) => {
+          if (!active) return;
+          setMatchedUsers(results.filter((entry) => !collaboratorEmails.has(entry.email.toLowerCase())));
+        })
+        .catch(() => {
+          if (!active) return;
+          setMatchedUsers([]);
+        })
+        .finally(() => {
+          if (!active) return;
+          setIsSearching(false);
+        });
+    }, 180);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [collaboratorEmails, looksLikeEmail, normalizedIdentity, selectedUser, workspaceId]);
 
   async function handleInvite() {
-    const normalizedIdentity = identity.trim().toLowerCase();
-    const looksLikeEmail = normalizedIdentity.includes("@");
+    const resolvedIdentity = selectedUser?.email ?? normalizedIdentity;
+    const resolvedLooksLikeEmail = resolvedIdentity.includes("@");
 
-    if (!normalizedIdentity) {
+    if (!resolvedIdentity) {
       setStatus({ type: "error", message: "Enter an email or invite name." });
       return;
     }
 
-    if (looksLikeEmail && !EMAIL_REGEX.test(normalizedIdentity)) {
+    if (resolvedLooksLikeEmail && !EMAIL_REGEX.test(resolvedIdentity)) {
       setStatus({ type: "error", message: "Enter a valid email address." });
       return;
     }
 
-    if (looksLikeEmail && collaboratorEmails.has(normalizedIdentity)) {
+    if (resolvedLooksLikeEmail && collaboratorEmails.has(resolvedIdentity)) {
       setStatus({ type: "error", message: "This collaborator is already in the workspace." });
+      return;
+    }
+
+    if (!resolvedLooksLikeEmail && !selectedUser) {
+      setStatus({ type: "error", message: "Select a user from the list or enter their email address." });
       return;
     }
 
     setIsSubmitting(true);
     try {
-      const result = await onInvite(normalizedIdentity, role);
+      const result = await onInvite(resolvedIdentity, role);
       setIdentity("");
       setRole("viewer");
+      setMatchedUsers([]);
+      setSelectedUser(null);
       setStatus({
         type: "success",
         message: result?.message ?? "Invitation sent.",
@@ -142,11 +189,52 @@ export function InviteCollaboratorsModal({
                 <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted-foreground)]" />
                 <input
                   className="w-full rounded-lg border border-[var(--border)] bg-white py-2.5 pl-9 pr-3 text-sm text-[var(--foreground)] outline-none"
-                  onChange={(event) => setIdentity(event.target.value)}
+                  onChange={(event) => {
+                    setIdentity(event.target.value);
+                    setSelectedUser(null);
+                    setStatus(null);
+                  }}
                   placeholder="name@company.com or Tin Hoang"
                   type="text"
                   value={identity}
                 />
+                {!looksLikeEmail && normalizedIdentity.length >= 2 ? (
+                  <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-10 overflow-hidden rounded-lg border border-[var(--border)] bg-white shadow-lg">
+                    {isSearching ? (
+                      <div className="flex items-center gap-2 px-3 py-2 text-sm text-[var(--muted-foreground)]">
+                        <LoaderCircle className="h-4 w-4 animate-spin" />
+                        Searching users...
+                      </div>
+                    ) : matchedUsers.length > 0 ? (
+                      matchedUsers.map((user) => (
+                        <button
+                          className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left transition hover:bg-[var(--accent)]"
+                          key={user.id}
+                          onClick={() => {
+                            setIdentity(user.displayName);
+                            setSelectedUser(user);
+                            setMatchedUsers([]);
+                            setStatus(null);
+                          }}
+                          type="button"
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium text-[var(--foreground)]">{user.displayName}</p>
+                            <p className="truncate text-xs text-[var(--muted-foreground)]">
+                              {user.email}
+                              {user.inviteName ? ` · ${user.inviteName}` : ""}
+                            </p>
+                          </div>
+                          {selectedUser?.id === user.id ? <Check className="h-4 w-4 text-[var(--primary)]" /> : null}
+                        </button>
+                      ))
+                    ) : (
+                      <div className="px-3 py-2 text-sm text-[var(--muted-foreground)]">
+                        No matching users. Enter their email to invite them directly.
+                      </div>
+                    )}
+                  </div>
+                ) : null}
               </label>
               <select
                 className="rounded-lg border border-[var(--border)] bg-white px-3 py-2.5 text-sm text-[var(--foreground)] outline-none"
@@ -168,8 +256,14 @@ export function InviteCollaboratorsModal({
               </button>
             </div>
             <p className="text-xs text-[var(--muted-foreground)]">
-              Teammates can share their invite name from Settings.
+              Start typing a teammate name to pick from matches, or enter an email directly.
             </p>
+            {selectedUser ? (
+              <div className="rounded-lg border border-[var(--border)] bg-[var(--accent)] px-3 py-2 text-sm text-[var(--foreground)]">
+                Inviting <span className="font-medium">{selectedUser.displayName}</span> at{" "}
+                <span className="text-[var(--muted-foreground)]">{selectedUser.email}</span>
+              </div>
+            ) : null}
             {status ? (
               <div className="space-y-2">
                 <p
