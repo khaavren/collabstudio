@@ -51,31 +51,6 @@ function inferOutputMode(prompt, requestedMode) {
   const normalized = String(prompt || "").trim().toLowerCase();
   if (!normalized) return "image";
 
-  const visualSignals = [
-    "generate",
-    "regenerate",
-    "create variant",
-    "new variant",
-    "render",
-    "mockup",
-    "illustration",
-    "concept image",
-    "concept render",
-    "product photo",
-    "photo-real",
-    "make the",
-    "change the",
-    "update the design",
-    "use attached image",
-    "use the attached image",
-    "based on this image",
-    "show me"
-  ];
-
-  if (visualSignals.some((signal) => normalized.includes(signal))) {
-    return "image";
-  }
-
   const questionStarts = [
     "what ",
     "why ",
@@ -105,6 +80,17 @@ function inferOutputMode(prompt, requestedMode) {
     "pros and cons",
     "tradeoff",
     "recommendation",
+    "recommendations",
+    "guidance",
+    "feedback",
+    "critique",
+    "analysis",
+    "explain",
+    "next step",
+    "next steps",
+    "what should",
+    "what to show",
+    "what do you think",
     "strategy",
     "packaging and shipping",
     "package and ship"
@@ -117,6 +103,31 @@ function inferOutputMode(prompt, requestedMode) {
 
   if (looksTextIntent) {
     return "text";
+  }
+
+  const visualSignals = [
+    "generate",
+    "regenerate",
+    "create variant",
+    "new variant",
+    "render",
+    "mockup",
+    "illustration",
+    "concept image",
+    "concept render",
+    "product photo",
+    "photo-real",
+    "make the",
+    "change the",
+    "update the design",
+    "use attached image",
+    "use the attached image",
+    "based on this image",
+    "show me"
+  ];
+
+  if (visualSignals.some((signal) => normalized.includes(signal))) {
+    return "image";
   }
 
   return "image";
@@ -281,6 +292,11 @@ function resolveOpenAiImageModel(model) {
 
   // Non-image models (for example GPT-5 text models) are not valid for the images endpoint.
   return "gpt-image-1";
+}
+
+function resolveOpenAiEditModel(model) {
+  const resolved = resolveOpenAiImageModel(model);
+  return resolved === "dall-e-2" ? resolved : "dall-e-2";
 }
 
 function resolveOpenAiTextModel(model) {
@@ -573,6 +589,7 @@ async function generateOpenAiImage(options) {
   const { apiKey, model, prompt, size, defaultParams, sourceImageUrl } = options;
   const maxAttempts = 2;
   const resolvedModel = resolveOpenAiImageModel(model);
+  const resolvedEditModel = resolveOpenAiEditModel(model);
   const openAiParams = sanitizeOpenAiImageParams(defaultParams.openai);
   const sourceImage = normalizedSourceImageUrl(sourceImageUrl);
   const editPrompt =
@@ -586,7 +603,7 @@ async function generateOpenAiImage(options) {
             const source = await fetchImageBytes(sourceImage);
             const filename = `source.${extensionFromMimeType(source.mimeType)}`;
             const formData = new FormData();
-            formData.append("model", resolvedModel);
+            formData.append("model", resolvedEditModel);
             formData.append("prompt", editPrompt);
             formData.append("size", size);
             formData.append("image", new Blob([source.bytes], { type: source.mimeType }), filename);
@@ -631,7 +648,7 @@ async function generateOpenAiImage(options) {
 
       return {
         imageUrl: image,
-        modelUsed: resolvedModel
+        modelUsed: sourceImage ? resolvedEditModel : resolvedModel
       };
     } catch (caughtError) {
       const retryable =
