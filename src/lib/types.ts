@@ -73,7 +73,7 @@ export type GenerateInput = {
   model?: string | null;
   referenceFile: File | null;
   sourceImageUrl?: string | null;
-  generationMode?: "force_image" | "image" | "auto";
+  generationMode?: "force_image" | "image" | "text" | "auto";
   conversationContext?: Array<{
     role: "user" | "assistant";
     content: string;

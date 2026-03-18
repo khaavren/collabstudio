@@ -75,6 +75,57 @@ const defaultGenerate: GenerateInput = {
   generationMode: "auto"
 };
 
+function inferConversationMode(prompt: string): "text" | "auto" {
+  const normalized = prompt.trim().toLowerCase();
+  if (!normalized) return "auto";
+
+  const questionStarts = [
+    "what ",
+    "why ",
+    "how ",
+    "which ",
+    "should ",
+    "can ",
+    "could ",
+    "would ",
+    "is ",
+    "are ",
+    "do ",
+    "does ",
+    "compare ",
+    "recommend ",
+    "suggest ",
+    "list ",
+    "tell me ",
+    "give "
+  ];
+
+  const advisorySignals = [
+    "pitch deck",
+    "outline",
+    "slides",
+    "what should",
+    "recommendation",
+    "recommendations",
+    "guidance",
+    "feedback",
+    "critique",
+    "analysis",
+    "strategy",
+    "pros and cons",
+    "tradeoff",
+    "action plan",
+    "next steps"
+  ];
+
+  const looksTextIntent =
+    normalized.includes("?") ||
+    questionStarts.some((entry) => normalized.startsWith(entry)) ||
+    advisorySignals.some((entry) => normalized.includes(entry));
+
+  return looksTextIntent ? "text" : "auto";
+}
+
 function PanelLoadingState({ label }: { label: string }) {
   return (
     <div className="flex min-h-[320px] items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--card)] text-sm text-[var(--muted-foreground)]">
@@ -552,7 +603,7 @@ export function RoomPage() {
         notes: "",
         referenceFile,
         sourceImageUrl: referenceFile ? null : baseVersion?.image_url ?? selectedAsset.image_url,
-        generationMode: "auto",
+        generationMode: inferConversationMode(prompt),
         conversationContext: context
       });
     } catch {

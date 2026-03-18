@@ -275,7 +275,7 @@ async function requestGeneratedOutput(
   prompt: string,
   size: string,
   sourceImageUrl?: string | null,
-  generationMode: "force_image" | "image" | "auto" = "auto",
+  generationMode: "force_image" | "image" | "text" | "auto" = "auto",
   conversationContext?: Array<{ role: "user" | "assistant"; content: string }>,
   model?: string | null
 ) {
@@ -408,7 +408,7 @@ async function uploadImageToStorage(
   size: string,
   file?: File | null,
   sourceImageUrl?: string | null,
-  generationMode: "force_image" | "image" | "auto" = "auto",
+  generationMode: "force_image" | "image" | "text" | "auto" = "auto",
   conversationContext?: Array<{ role: "user" | "assistant"; content: string }>,
   model?: string | null
 ): Promise<GeneratedOutput> {
@@ -518,7 +518,7 @@ export async function generateAssetVersion(options: {
   notes: string;
   referenceFile: File | null;
   sourceImageUrl?: string | null;
-  generationMode?: "force_image" | "image" | "auto";
+  generationMode?: "force_image" | "image" | "text" | "auto";
   conversationContext?: Array<{ role: "user" | "assistant"; content: string }>;
 }) {
   const {
