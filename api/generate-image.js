@@ -386,14 +386,17 @@ function extensionFromMimeType(mimeType) {
 }
 
 function parseDataUrlImage(dataUrl) {
-  const match = dataUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+  const match = dataUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+)(;[^,]*)?,(.*)$/);
   if (!match) {
     throw new Error("Source image data URL is invalid.");
   }
 
   const mimeType = match[1] || "image/png";
-  const base64 = match[2] || "";
-  const bytes = Buffer.from(base64, "base64");
+  const metadata = String(match[2] || "").toLowerCase();
+  const payload = match[3] || "";
+  const bytes = metadata.includes(";base64")
+    ? Buffer.from(payload, "base64")
+    : Buffer.from(decodeURIComponent(payload), "utf8");
 
   if (bytes.length === 0) {
     throw new Error("Source image data URL is empty.");
