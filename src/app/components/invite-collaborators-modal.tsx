@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Check, LoaderCircle, Mail, Shield, Trash2, UserPlus, X } from "lucide-react";
+import { ChevronRight, LoaderCircle, Mail, Shield, Trash2, UserPlus, X } from "lucide-react";
 import { searchWorkspaceUsers, type WorkspaceUserOption } from "@/lib/workspaces";
 
 export interface Collaborator {
@@ -61,6 +61,8 @@ export function InviteCollaboratorsModal({
   const [matchedUsers, setMatchedUsers] = useState<WorkspaceUserOption[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [selectedUser, setSelectedUser] = useState<WorkspaceUserOption | null>(null);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [highlightedUserIndex, setHighlightedUserIndex] = useState(0);
 
   useEffect(() => {
     setIdentity("");
@@ -68,6 +70,8 @@ export function InviteCollaboratorsModal({
     setStatus(null);
     setMatchedUsers([]);
     setSelectedUser(null);
+    setIsSearchFocused(false);
+    setHighlightedUserIndex(0);
   }, [workspaceId]);
 
   useEffect(() => {
@@ -82,12 +86,14 @@ export function InviteCollaboratorsModal({
   );
   const normalizedIdentity = identity.trim().toLowerCase();
   const looksLikeEmail = normalizedIdentity.includes("@");
-  const showUserPicker = !looksLikeEmail && normalizedIdentity.length >= 2 && !selectedUser;
+  const showUserPicker =
+    isSearchFocused && !looksLikeEmail && normalizedIdentity.length >= 2 && !selectedUser;
 
   useEffect(() => {
     if (looksLikeEmail || normalizedIdentity.length < 2 || selectedUser) {
       setMatchedUsers([]);
       setIsSearching(false);
+      setHighlightedUserIndex(0);
       return;
     }
 
@@ -99,6 +105,7 @@ export function InviteCollaboratorsModal({
         .then((results) => {
           if (!active) return;
           setMatchedUsers(results.filter((entry) => !collaboratorEmails.has(entry.email.toLowerCase())));
+          setHighlightedUserIndex(0);
         })
         .catch(() => {
           if (!active) return;
@@ -115,6 +122,51 @@ export function InviteCollaboratorsModal({
       window.clearTimeout(timer);
     };
   }, [collaboratorEmails, looksLikeEmail, normalizedIdentity, selectedUser, workspaceId]);
+
+  function handleSelectUser(user: WorkspaceUserOption) {
+    setIdentity(user.displayName);
+    setSelectedUser(user);
+    setMatchedUsers([]);
+    setStatus(null);
+    setIsSearchFocused(false);
+    setHighlightedUserIndex(0);
+  }
+
+  function handleSearchKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (!showUserPicker || matchedUsers.length === 0) {
+      if (event.key === "Escape") {
+        setIsSearchFocused(false);
+      }
+      return;
+    }
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setHighlightedUserIndex((current) => (current + 1) % matchedUsers.length);
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setHighlightedUserIndex((current) => (current - 1 + matchedUsers.length) % matchedUsers.length);
+      return;
+    }
+
+    if (event.key === "Enter") {
+      event.preventDefault();
+      const highlightedUser = matchedUsers[highlightedUserIndex];
+      if (highlightedUser) {
+        handleSelectUser(highlightedUser);
+      }
+      return;
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setMatchedUsers([]);
+      setIsSearchFocused(false);
+    }
+  }
 
   async function handleInvite() {
     const resolvedIdentity = selectedUser?.email ?? normalizedIdentity;
@@ -195,6 +247,13 @@ export function InviteCollaboratorsModal({
                     setSelectedUser(null);
                     setStatus(null);
                   }}
+                  onBlur={() => {
+                    window.setTimeout(() => {
+                      setIsSearchFocused(false);
+                    }, 120);
+                  }}
+                  onFocus={() => setIsSearchFocused(true)}
+                  onKeyDown={handleSearchKeyDown}
                   placeholder="name@company.com or Tin Hoang"
                   type="text"
                   value={identity}
@@ -227,16 +286,17 @@ export function InviteCollaboratorsModal({
                     Searching users...
                   </div>
                 ) : matchedUsers.length > 0 ? (
-                  matchedUsers.map((user) => (
+                  matchedUsers.map((user, index) => (
                     <button
-                      className="flex w-full items-center justify-between gap-3 border-t border-[var(--border)] px-3 py-2 text-left transition first:border-t-0 hover:bg-[var(--accent)]"
+                      className={`flex w-full items-center justify-between gap-3 border-t border-[var(--border)] px-3 py-2 text-left transition first:border-t-0 ${
+                        index === highlightedUserIndex ? "bg-[var(--accent)]" : "hover:bg-[var(--accent)]"
+                      }`}
                       key={user.id}
-                      onClick={() => {
-                        setIdentity(user.displayName);
-                        setSelectedUser(user);
-                        setMatchedUsers([]);
-                        setStatus(null);
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        handleSelectUser(user);
                       }}
+                      onMouseEnter={() => setHighlightedUserIndex(index)}
                       type="button"
                     >
                       <div className="min-w-0">
@@ -246,7 +306,7 @@ export function InviteCollaboratorsModal({
                           {user.inviteName ? ` · ${user.inviteName}` : ""}
                         </p>
                       </div>
-                      <Check className="h-4 w-4 text-transparent" />
+                      <ChevronRight className="h-4 w-4 text-[var(--muted-foreground)]" />
                     </button>
                   ))
                 ) : (
@@ -260,9 +320,27 @@ export function InviteCollaboratorsModal({
               Start typing a teammate name to pick from matches, or enter an email directly.
             </p>
             {selectedUser ? (
-              <div className="rounded-lg border border-[var(--border)] bg-[var(--accent)] px-3 py-2 text-sm text-[var(--foreground)]">
-                Inviting <span className="font-medium">{selectedUser.displayName}</span> at{" "}
-                <span className="text-[var(--muted-foreground)]">{selectedUser.email}</span>
+              <div className="flex items-center justify-between gap-3 rounded-lg border border-[var(--border)] bg-[var(--accent)] px-3 py-2 text-sm text-[var(--foreground)]">
+                <div className="min-w-0">
+                  <p>
+                    Inviting <span className="font-medium">{selectedUser.displayName}</span>
+                  </p>
+                  <p className="truncate text-xs text-[var(--muted-foreground)]">{selectedUser.email}</p>
+                </div>
+                <button
+                  className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[var(--border)] bg-white px-2.5 py-1.5 text-xs font-medium text-[var(--foreground)] transition hover:bg-[var(--card)]"
+                  onClick={() => {
+                    setIdentity("");
+                    setSelectedUser(null);
+                    setMatchedUsers([]);
+                    setIsSearchFocused(true);
+                    setStatus(null);
+                  }}
+                  type="button"
+                >
+                  <X className="h-3.5 w-3.5" />
+                  Clear
+                </button>
               </div>
             ) : null}
             {status ? (
