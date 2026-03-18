@@ -82,6 +82,7 @@ export function InviteCollaboratorsModal({
   );
   const normalizedIdentity = identity.trim().toLowerCase();
   const looksLikeEmail = normalizedIdentity.includes("@");
+  const showUserPicker = !looksLikeEmail && normalizedIdentity.length >= 2 && !selectedUser;
 
   useEffect(() => {
     if (looksLikeEmail || normalizedIdentity.length < 2 || selectedUser) {
@@ -198,43 +199,6 @@ export function InviteCollaboratorsModal({
                   type="text"
                   value={identity}
                 />
-                {!looksLikeEmail && normalizedIdentity.length >= 2 ? (
-                  <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-10 overflow-hidden rounded-lg border border-[var(--border)] bg-white shadow-lg">
-                    {isSearching ? (
-                      <div className="flex items-center gap-2 px-3 py-2 text-sm text-[var(--muted-foreground)]">
-                        <LoaderCircle className="h-4 w-4 animate-spin" />
-                        Searching users...
-                      </div>
-                    ) : matchedUsers.length > 0 ? (
-                      matchedUsers.map((user) => (
-                        <button
-                          className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left transition hover:bg-[var(--accent)]"
-                          key={user.id}
-                          onClick={() => {
-                            setIdentity(user.displayName);
-                            setSelectedUser(user);
-                            setMatchedUsers([]);
-                            setStatus(null);
-                          }}
-                          type="button"
-                        >
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-medium text-[var(--foreground)]">{user.displayName}</p>
-                            <p className="truncate text-xs text-[var(--muted-foreground)]">
-                              {user.email}
-                              {user.inviteName ? ` · ${user.inviteName}` : ""}
-                            </p>
-                          </div>
-                          {selectedUser?.id === user.id ? <Check className="h-4 w-4 text-[var(--primary)]" /> : null}
-                        </button>
-                      ))
-                    ) : (
-                      <div className="px-3 py-2 text-sm text-[var(--muted-foreground)]">
-                        No matching users. Enter their email to invite them directly.
-                      </div>
-                    )}
-                  </div>
-                ) : null}
               </label>
               <select
                 className="rounded-lg border border-[var(--border)] bg-white px-3 py-2.5 text-sm text-[var(--foreground)] outline-none"
@@ -255,6 +219,43 @@ export function InviteCollaboratorsModal({
                 {isSubmitting ? "Sending..." : "Send Invitation"}
               </button>
             </div>
+            {showUserPicker ? (
+              <div className="overflow-hidden rounded-lg border border-[var(--border)] bg-white shadow-sm">
+                {isSearching ? (
+                  <div className="flex items-center gap-2 px-3 py-2 text-sm text-[var(--muted-foreground)]">
+                    <LoaderCircle className="h-4 w-4 animate-spin" />
+                    Searching users...
+                  </div>
+                ) : matchedUsers.length > 0 ? (
+                  matchedUsers.map((user) => (
+                    <button
+                      className="flex w-full items-center justify-between gap-3 border-t border-[var(--border)] px-3 py-2 text-left transition first:border-t-0 hover:bg-[var(--accent)]"
+                      key={user.id}
+                      onClick={() => {
+                        setIdentity(user.displayName);
+                        setSelectedUser(user);
+                        setMatchedUsers([]);
+                        setStatus(null);
+                      }}
+                      type="button"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-[var(--foreground)]">{user.displayName}</p>
+                        <p className="truncate text-xs text-[var(--muted-foreground)]">
+                          {user.email}
+                          {user.inviteName ? ` · ${user.inviteName}` : ""}
+                        </p>
+                      </div>
+                      <Check className="h-4 w-4 text-transparent" />
+                    </button>
+                  ))
+                ) : (
+                  <div className="px-3 py-2 text-sm text-[var(--muted-foreground)]">
+                    No matching users. Enter their email to invite them directly.
+                  </div>
+                )}
+              </div>
+            ) : null}
             <p className="text-xs text-[var(--muted-foreground)]">
               Start typing a teammate name to pick from matches, or enter an email directly.
             </p>
