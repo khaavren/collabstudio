@@ -6,6 +6,8 @@ import { assertWorkspaceAdmin } from "../../_lib/workspaces.js";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const AUTH_PAGE_SIZE = 1000;
+const DEFAULT_SEARCH_LIMIT = 8;
+const MAX_SEARCH_LIMIT = 20;
 
 function toDisplayName(email) {
   return String(email)
@@ -53,6 +55,23 @@ function candidateValuesForUser(user) {
     name,
     preferredUsername
   };
+}
+
+function preferredInviteName(user) {
+  const metadata = user?.user_metadata && typeof user.user_metadata === "object" ? user.user_metadata : {};
+  const values = [metadata.preferred_username, metadata.display_name, metadata.full_name, metadata.name];
+
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    const trimmed = value.trim();
+    if (trimmed.length > 0) return trimmed;
+  }
+
+  if (typeof user?.email === "string" && user.email.includes("@")) {
+    return user.email.split("@")[0];
+  }
+
+  return "user";
 }
 
 async function listAllAuthUsers(adminClient) {
@@ -155,18 +174,101 @@ function parseRole(value) {
   return value === "admin" || value === "editor" || value === "viewer" ? value : null;
 }
 
+function parseSearchLimit(value) {
+  const parsed = Number.parseInt(String(value ?? ""), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_SEARCH_LIMIT;
+  return Math.min(parsed, MAX_SEARCH_LIMIT);
+}
+
 function workspaceIdFromReq(req) {
   return String(req.query.workspaceId ?? "").trim();
 }
 
+function matchScore(candidate, query, exactScore, prefixScore, containsScore) {
+  if (!candidate) return 0;
+  if (candidate === query) return exactScore;
+  if (candidate.startsWith(query)) return prefixScore;
+  if (candidate.includes(query)) return containsScore;
+  return 0;
+}
+
+async function handleSearchUsers(req, res, user, workspaceId) {
+  await assertWorkspaceAdmin(user, workspaceId);
+
+  const query = normalizeText(req.query.q);
+  if (query.length < 2) {
+    sendJson(res, 200, { users: [] });
+    return;
+  }
+
+  const adminClient = getSupabaseAdminClient();
+  const users = await listAllAuthUsers(adminClient);
+  const limit = parseSearchLimit(req.query.limit);
+  const matches = users
+    .map((entry) => {
+      const candidates = candidateValuesForUser(entry);
+      const score = Math.max(
+        matchScore(candidates.preferredUsername, query, 120, 90, 70),
+        matchScore(candidates.displayName, query, 110, 85, 65),
+        matchScore(candidates.fullName, query, 105, 80, 60),
+        matchScore(candidates.name, query, 100, 78, 58),
+        matchScore(candidates.localPart, query, 95, 75, 55),
+        matchScore(candidates.email, query, 90, 72, 52)
+      );
+
+      if (score <= 0 || !candidates.email) return null;
+
+      return {
+        id: entry.id,
+        email: candidates.email,
+        displayName: metadataDisplayName(entry) ?? toDisplayName(candidates.email),
+        inviteName: preferredInviteName(entry),
+        score
+      };
+    })
+    .filter(Boolean)
+    .sort((left, right) => {
+      if (right.score !== left.score) {
+        return right.score - left.score;
+      }
+
+      return left.displayName.localeCompare(right.displayName);
+    });
+
+  const deduped = [];
+  const seenEmails = new Set();
+
+  for (const match of matches) {
+    if (seenEmails.has(match.email)) continue;
+    seenEmails.add(match.email);
+    deduped.push({
+      id: match.id,
+      email: match.email,
+      displayName: match.displayName,
+      inviteName: match.inviteName
+    });
+
+    if (deduped.length >= limit) {
+      break;
+    }
+  }
+
+  sendJson(res, 200, { users: deduped });
+}
+
 export default async function handler(req, res) {
-  if (!allowMethod(req, res, ["POST"])) return;
+  if (!allowMethod(req, res, ["GET", "POST"])) return;
 
   try {
     const user = await getAuthenticatedUser(req);
     const workspaceId = workspaceIdFromReq(req);
     if (!workspaceId) {
       sendJson(res, 400, { error: "Missing workspace id." });
+      return;
+    }
+
+    if (req.method === "GET") {
+      await handleSearchUsers(req, res, user, workspaceId);
       return;
     }
 

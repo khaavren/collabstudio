@@ -225,7 +225,7 @@ export async function fetchWorkspaceById(workspaceId: string | null | undefined)
 
 export async function searchWorkspaceUsers(workspaceId: string, query: string, limit = 8) {
   const payload = await requestJson<{ users: WorkspaceUserOption[] }>(
-    `/api/workspaces/${workspaceId}/users?q=${encodeURIComponent(query)}&limit=${encodeURIComponent(String(limit))}`,
+    `/api/workspaces/${workspaceId}/collaborators?q=${encodeURIComponent(query)}&limit=${encodeURIComponent(String(limit))}`,
     {
       method: "GET"
     },
