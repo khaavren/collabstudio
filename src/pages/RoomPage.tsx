@@ -578,6 +578,13 @@ export function RoomPage() {
       versions.find((version) => version.id === activeVersionId) ??
       versions[0] ??
       null;
+    const inferredMode = inferConversationMode(prompt);
+    const conversationMode =
+      !referenceFile && baseVersion?.output_type === "text" ? "text" : inferredMode;
+    const sourceImageUrl =
+      referenceFile || conversationMode === "text"
+        ? null
+        : baseVersion?.image_url ?? selectedAsset.image_url;
     const context = [...versions]
       .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
       .flatMap((version) => {
@@ -602,8 +609,8 @@ export function RoomPage() {
         size: baseVersion?.size ?? "1024x1024",
         notes: "",
         referenceFile,
-        sourceImageUrl: referenceFile ? null : baseVersion?.image_url ?? selectedAsset.image_url,
-        generationMode: inferConversationMode(prompt),
+        sourceImageUrl,
+        generationMode: conversationMode,
         conversationContext: context
       });
     } catch {
