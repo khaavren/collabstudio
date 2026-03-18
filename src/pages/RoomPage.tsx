@@ -1,8 +1,9 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useState, type ComponentType } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useLoaderData, useNavigate, useParams } from "react-router-dom";
 import { AssetCard } from "@/components/AssetCard";
 import { PageHeader } from "@/components/PageHeader";
 import { Sidebar } from "@/components/Sidebar";
+import { lazyImportComponent } from "@/lib/lazy";
 import {
   addComment,
   type ActorProfile,
@@ -41,40 +42,23 @@ import type {
 type RoomLoaderData = {
   roomSlug: string;
 };
-
-function lazyComponent<
-  TComponent extends ComponentType<any>,
-  TModule extends Record<string, unknown> = Record<string, unknown>
->(
-  loader: () => Promise<TModule>,
-  exportName: keyof TModule
-) {
-  return lazy(async () => {
-    const module = await loader();
-
-    return {
-      default: module[exportName] as TComponent
-    };
-  });
-}
-
-const AssetDetailView = lazyComponent<typeof import("@/components/AssetDetailView").AssetDetailView>(
+const AssetDetailView = lazyImportComponent<typeof import("@/components/AssetDetailView").AssetDetailView>(
   () => import("@/components/AssetDetailView"),
   "AssetDetailView"
 );
-const EditAssetModal = lazyComponent<typeof import("@/components/EditAssetModal").EditAssetModal>(
+const EditAssetModal = lazyImportComponent<typeof import("@/components/EditAssetModal").EditAssetModal>(
   () => import("@/components/EditAssetModal"),
   "EditAssetModal"
 );
-const GenerateInlinePanel = lazyComponent<typeof import("@/components/GenerateInlinePanel").GenerateInlinePanel>(
+const GenerateInlinePanel = lazyImportComponent<typeof import("@/components/GenerateInlinePanel").GenerateInlinePanel>(
   () => import("@/components/GenerateInlinePanel"),
   "GenerateInlinePanel"
 );
-const GenerateModal = lazyComponent<typeof import("@/components/GenerateModal").GenerateModal>(
+const GenerateModal = lazyImportComponent<typeof import("@/components/GenerateModal").GenerateModal>(
   () => import("@/components/GenerateModal"),
   "GenerateModal"
 );
-const InviteCollaboratorsModal = lazyComponent<
+const InviteCollaboratorsModal = lazyImportComponent<
   typeof import("@/app/components/invite-collaborators-modal").InviteCollaboratorsModal
 >(
   () => import("@/app/components/invite-collaborators-modal"),

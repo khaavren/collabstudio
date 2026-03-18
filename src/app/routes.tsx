@@ -1,4 +1,4 @@
-import { Suspense, lazy, type ComponentType, type ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import {
   Outlet,
   RouterProvider,
@@ -7,46 +7,34 @@ import {
   useLocation,
   useNavigation
 } from "react-router-dom";
+import { lazyImportComponent } from "@/lib/lazy";
 
-function lazyPage<TModule extends Record<string, unknown>>(
-  loader: () => Promise<TModule>,
-  exportName: keyof TModule
-) {
-  return lazy(async () => {
-    const module = await loader();
-
-    return {
-      default: module[exportName] as ComponentType
-    };
-  });
-}
-
-const HomePage = lazyPage(() => import("@/app/pages/home"), "HomePage");
-const LoginPage = lazyPage(() => import("@/app/pages/login"), "LoginPage");
-const ForgotPasswordPage = lazyPage(() => import("@/app/pages/forgot-password"), "ForgotPasswordPage");
-const ResetPasswordPage = lazyPage(() => import("@/app/pages/reset-password"), "ResetPasswordPage");
-const SignupPage = lazyPage(() => import("@/app/pages/signup"), "SignupPage");
-const ProfilePage = lazyPage(() => import("@/pages/ProfilePage"), "ProfilePage");
-const RoomPage = lazyPage(() => import("@/pages/RoomPage"), "RoomPage");
-const AdminConsoleLayout = lazyPage(
+const HomePage = lazyImportComponent(() => import("@/app/pages/home"), "HomePage");
+const LoginPage = lazyImportComponent(() => import("@/app/pages/login"), "LoginPage");
+const ForgotPasswordPage = lazyImportComponent(() => import("@/app/pages/forgot-password"), "ForgotPasswordPage");
+const ResetPasswordPage = lazyImportComponent(() => import("@/app/pages/reset-password"), "ResetPasswordPage");
+const SignupPage = lazyImportComponent(() => import("@/app/pages/signup"), "SignupPage");
+const ProfilePage = lazyImportComponent(() => import("@/pages/ProfilePage"), "ProfilePage");
+const RoomPage = lazyImportComponent(() => import("@/pages/RoomPage"), "RoomPage");
+const AdminConsoleLayout = lazyImportComponent(
   () => import("@/components/admin/AdminConsoleLayout"),
   "AdminConsoleLayout"
 );
-const AdminDashboardPage = lazyPage(() => import("@/pages/admin/AdminDashboardPage"), "AdminDashboardPage");
-const AdminSupportPage = lazyPage(() => import("@/pages/admin/AdminSupportPage"), "AdminSupportPage");
-const AdminTicketDetailPage = lazyPage(
+const AdminDashboardPage = lazyImportComponent(() => import("@/pages/admin/AdminDashboardPage"), "AdminDashboardPage");
+const AdminSupportPage = lazyImportComponent(() => import("@/pages/admin/AdminSupportPage"), "AdminSupportPage");
+const AdminTicketDetailPage = lazyImportComponent(
   () => import("@/pages/admin/AdminTicketDetailPage"),
   "AdminTicketDetailPage"
 );
-const AdminCustomersPage = lazyPage(() => import("@/pages/admin/AdminCustomersPage"), "AdminCustomersPage");
-const AdminCustomerDetailPage = lazyPage(
+const AdminCustomersPage = lazyImportComponent(() => import("@/pages/admin/AdminCustomersPage"), "AdminCustomersPage");
+const AdminCustomerDetailPage = lazyImportComponent(
   () => import("@/pages/admin/AdminCustomerDetailPage"),
   "AdminCustomerDetailPage"
 );
-const AdminUsersPage = lazyPage(() => import("@/pages/admin/AdminUsersPage"), "AdminUsersPage");
-const AdminUserDetailPage = lazyPage(() => import("@/pages/admin/AdminUserDetailPage"), "AdminUserDetailPage");
-const AdminAuditPage = lazyPage(() => import("@/pages/admin/AdminAuditPage"), "AdminAuditPage");
-const AdminSystemPage = lazyPage(() => import("@/pages/admin/AdminSystemPage"), "AdminSystemPage");
+const AdminUsersPage = lazyImportComponent(() => import("@/pages/admin/AdminUsersPage"), "AdminUsersPage");
+const AdminUserDetailPage = lazyImportComponent(() => import("@/pages/admin/AdminUserDetailPage"), "AdminUserDetailPage");
+const AdminAuditPage = lazyImportComponent(() => import("@/pages/admin/AdminAuditPage"), "AdminAuditPage");
+const AdminSystemPage = lazyImportComponent(() => import("@/pages/admin/AdminSystemPage"), "AdminSystemPage");
 
 function roomLoader({ params }: LoaderFunctionArgs) {
   return {
