@@ -1,4 +1,4 @@
-import { Suspense, type ReactNode } from "react";
+import { Suspense, useEffect, type ReactNode } from "react";
 import {
   Outlet,
   RouterProvider,
@@ -171,5 +171,9 @@ const router = createBrowserRouter([
 ]);
 
 export function AppRouter() {
+  useEffect(() => {
+    document.title = "MagisterLudi";
+  }, []);
+
   return <RouterProvider router={router} />;
 }
