@@ -51,7 +51,7 @@ function toUserErrorMessage(error: PostgrestError | Error) {
   const code = "code" in error ? error.code : undefined;
 
   if (code === "42501" || message.toLowerCase().includes("row-level security")) {
-    return "Write access is blocked. Enable Supabase Anonymous auth, then retry.";
+    return "You do not have permission to make that change.";
   }
 
   if (code === "23505") {

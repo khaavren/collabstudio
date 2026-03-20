@@ -36,6 +36,7 @@ type AssetDetailViewProps = {
   onRegenerate: (version: AssetVersion) => void;
   onSelectVersion: (versionId: string) => void;
   onSendPrompt: (prompt: string, referenceFile: File | null, model: string | null) => Promise<void>;
+  readOnly?: boolean;
   versions: AssetVersion[];
 };
 
@@ -130,7 +131,8 @@ function GenerationMessage({
   onCreateVariant,
   onDeleteVersion,
   onImageClick,
-  onRegenerate
+  onRegenerate,
+  readOnly = false
 }: {
   isActive: boolean;
   message: Extract<ConversationMessage, { type: "generation" }>;
@@ -138,6 +140,7 @@ function GenerationMessage({
   onDeleteVersion: (version: AssetVersion) => void;
   onImageClick: (imageUrl: string) => void;
   onRegenerate: (version: AssetVersion) => void;
+  readOnly?: boolean;
 }) {
   const isImageResponse = Boolean(message.imageUrl) && !message.hideImage;
 
@@ -225,32 +228,34 @@ function GenerationMessage({
               </div>
             </button>
 
-            <div className="flex items-center gap-3">
-              <button
-                className="inline-flex items-center gap-1.5 text-xs text-[var(--muted-foreground)] transition hover:text-[var(--foreground)]"
-                onClick={() => onRegenerate(message.sourceVersion)}
-                type="button"
-              >
-                <RotateCw className="h-3.5 w-3.5" />
-                Regenerate
-              </button>
-              <button
-                className="inline-flex items-center gap-1.5 text-xs text-[var(--muted-foreground)] transition hover:text-[var(--foreground)]"
-                onClick={() => onCreateVariant(message.sourceVersion)}
-                type="button"
-              >
-                <ImageIcon className="h-3.5 w-3.5" />
-                Create Variant
-              </button>
-              <button
-                className="inline-flex items-center gap-1.5 text-xs text-[var(--muted-foreground)] transition hover:text-[#b54a3f]"
-                onClick={() => onDeleteVersion(message.sourceVersion)}
-                type="button"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-                Delete Turn
-              </button>
-            </div>
+            {readOnly ? null : (
+              <div className="flex items-center gap-3">
+                <button
+                  className="inline-flex items-center gap-1.5 text-xs text-[var(--muted-foreground)] transition hover:text-[var(--foreground)]"
+                  onClick={() => onRegenerate(message.sourceVersion)}
+                  type="button"
+                >
+                  <RotateCw className="h-3.5 w-3.5" />
+                  Regenerate
+                </button>
+                <button
+                  className="inline-flex items-center gap-1.5 text-xs text-[var(--muted-foreground)] transition hover:text-[var(--foreground)]"
+                  onClick={() => onCreateVariant(message.sourceVersion)}
+                  type="button"
+                >
+                  <ImageIcon className="h-3.5 w-3.5" />
+                  Create Variant
+                </button>
+                <button
+                  className="inline-flex items-center gap-1.5 text-xs text-[var(--muted-foreground)] transition hover:text-[#b54a3f]"
+                  onClick={() => onDeleteVersion(message.sourceVersion)}
+                  type="button"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Delete Turn
+                </button>
+              </div>
+            )}
           </>
         ) : (
           <div className="max-w-4xl rounded-xl border border-[var(--border)] bg-[var(--card)] px-4 py-3 text-sm text-[var(--foreground)] 2xl:max-w-5xl">
@@ -492,6 +497,7 @@ export function AssetDetailView({
   onRegenerate,
   onSelectVersion,
   onSendPrompt,
+  readOnly = false,
   versions
 }: AssetDetailViewProps) {
   const [promptInput, setPromptInput] = useState("");
@@ -658,14 +664,16 @@ export function AssetDetailView({
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <h2 className="truncate text-base font-medium text-[var(--foreground)]">{asset.title}</h2>
-              <button
-                className="rounded-md p-1.5 text-[var(--muted-foreground)] transition-colors hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
-                onClick={() => setIsEditModalOpen(true)}
-                title="Edit project details"
-                type="button"
-              >
-                <Pencil className="h-4 w-4" />
-              </button>
+              {readOnly ? null : (
+                <button
+                  className="rounded-md p-1.5 text-[var(--muted-foreground)] transition-colors hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
+                  onClick={() => setIsEditModalOpen(true)}
+                  title="Edit project details"
+                  type="button"
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+              )}
             </div>
             <div className="mt-1 flex flex-wrap gap-1.5">
               {asset.tags.map((tag) => (
@@ -706,6 +714,7 @@ export function AssetDetailView({
                       onDeleteVersion={onDeleteVersion}
                       onImageClick={setSelectedImage}
                       onRegenerate={onRegenerate}
+                      readOnly={readOnly}
                     />
                   </div>
                 )
@@ -715,16 +724,24 @@ export function AssetDetailView({
             </div>
           </div>
 
-          <PromptInputBar
-            isSending={isSendingPrompt}
-            model={promptModel}
-            onChange={setPromptInput}
-            onModelChange={setPromptModel}
-            onReferenceFileChange={setPromptReferenceFile}
-            onSend={handleSendPrompt}
-            referenceFile={promptReferenceFile}
-            value={promptInput}
-          />
+          {readOnly ? (
+            <div className="shrink-0 border-t border-[var(--border)] bg-[var(--card)] p-4">
+              <div className="mx-auto w-full max-w-5xl rounded-xl border border-[var(--border)] bg-[var(--background)] px-4 py-3 text-sm text-[var(--muted-foreground)] 2xl:max-w-6xl">
+                Viewer access is read-only. Prompting, variants, and edits are disabled in this workspace.
+              </div>
+            </div>
+          ) : (
+            <PromptInputBar
+              isSending={isSendingPrompt}
+              model={promptModel}
+              onChange={setPromptInput}
+              onModelChange={setPromptModel}
+              onReferenceFileChange={setPromptReferenceFile}
+              onSend={handleSendPrompt}
+              referenceFile={promptReferenceFile}
+              value={promptInput}
+            />
+          )}
         </div>
 
         <aside className="w-80 shrink-0 border-l border-[var(--border)] bg-[var(--card)] xl:w-[22rem] 2xl:w-96">
@@ -755,7 +772,7 @@ export function AssetDetailView({
 
             <section className="p-4">
               <h3 className="mb-3 text-sm font-medium text-[var(--foreground)]">Team Comments</h3>
-              <CommentThread comments={comments} onAddComment={onAddComment} />
+              <CommentThread comments={comments} onAddComment={onAddComment} readOnly={readOnly} />
             </section>
           </div>
         </aside>
@@ -763,19 +780,21 @@ export function AssetDetailView({
 
       {selectedImage ? <ImageLightbox imageUrl={selectedImage} onClose={() => setSelectedImage(null)} /> : null}
 
-      <EditAssetModal
-        assetDescription={asset.description}
-        assetTags={asset.tags}
-        assetTitle={asset.title}
-        isOpen={isEditModalOpen}
-        onClose={() => setIsEditModalOpen(false)}
-        onDelete={() => {
-          void handleDeleteAsset();
-        }}
-        onSave={(data) => {
-          void handleSaveAsset(data);
-        }}
-      />
+      {readOnly ? null : (
+        <EditAssetModal
+          assetDescription={asset.description}
+          assetTags={asset.tags}
+          assetTitle={asset.title}
+          isOpen={isEditModalOpen}
+          onClose={() => setIsEditModalOpen(false)}
+          onDelete={() => {
+            void handleDeleteAsset();
+          }}
+          onSave={(data) => {
+            void handleSaveAsset(data);
+          }}
+        />
+      )}
     </div>
   );
 }

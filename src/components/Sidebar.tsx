@@ -7,6 +7,7 @@ import type { Room } from "@/lib/types";
 
 type SidebarProps = {
   activeSlug: string;
+  canManageRooms?: boolean;
   onCreateRoom: () => void;
   onDeleteRoom: (room: Room) => Promise<boolean> | boolean;
   onRenameRoom: (room: Room, name: string) => Promise<boolean> | boolean;
@@ -19,6 +20,7 @@ type SidebarProps = {
 
 export function Sidebar({
   activeSlug,
+  canManageRooms = true,
   onCreateRoom,
   onDeleteRoom,
   onRenameRoom,
@@ -87,7 +89,7 @@ export function Sidebar({
                   {room.name}
                 </button>
 
-                {hoveredRoomId === room.id ? (
+                {canManageRooms && hoveredRoomId === room.id ? (
                   <button
                     className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 transition-colors hover:bg-[var(--accent)]"
                     onClick={(event) => {
@@ -105,14 +107,16 @@ export function Sidebar({
             );
           })}
 
-          <button
-            className="mt-2 inline-flex items-center gap-1 rounded-lg px-3 py-2 text-sm text-[var(--muted-foreground)] transition hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
-            onClick={onCreateRoom}
-            type="button"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            New Room
-          </button>
+          {canManageRooms ? (
+            <button
+              className="mt-2 inline-flex items-center gap-1 rounded-lg px-3 py-2 text-sm text-[var(--muted-foreground)] transition hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
+              onClick={onCreateRoom}
+              type="button"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              New Room
+            </button>
+          ) : null}
         </nav>
 
         <div className="border-t border-[var(--border)] px-4 py-3">

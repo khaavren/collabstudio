@@ -5,9 +5,10 @@ import type { Comment } from "@/lib/types";
 type CommentThreadProps = {
   comments: Comment[];
   onAddComment: (content: string) => Promise<void>;
+  readOnly?: boolean;
 };
 
-export function CommentThread({ comments, onAddComment }: CommentThreadProps) {
+export function CommentThread({ comments, onAddComment, readOnly = false }: CommentThreadProps) {
   const [draft, setDraft] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -46,21 +47,27 @@ export function CommentThread({ comments, onAddComment }: CommentThreadProps) {
         ))}
       </div>
 
-      <form className="space-y-2" onSubmit={handleSubmit}>
-        <input
-          className="w-full rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-sm text-[var(--foreground)] outline-none"
-          onChange={(event) => setDraft(event.target.value)}
-          placeholder="Leave a comment"
-          value={draft}
-        />
-        <button
-          className="rounded-lg bg-[var(--accent)] px-3 py-1.5 text-sm text-[var(--foreground)] disabled:opacity-60"
-          disabled={isSubmitting || !draft.trim()}
-          type="submit"
-        >
-          {isSubmitting ? "Posting..." : "Post"}
-        </button>
-      </form>
+      {readOnly ? (
+        <p className="rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm text-[var(--muted-foreground)]">
+          Viewer access is read-only. Commenting is disabled in this workspace.
+        </p>
+      ) : (
+        <form className="space-y-2" onSubmit={handleSubmit}>
+          <input
+            className="w-full rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-sm text-[var(--foreground)] outline-none"
+            onChange={(event) => setDraft(event.target.value)}
+            placeholder="Leave a comment"
+            value={draft}
+          />
+          <button
+            className="rounded-lg bg-[var(--accent)] px-3 py-1.5 text-sm text-[var(--foreground)] disabled:opacity-60"
+            disabled={isSubmitting || !draft.trim()}
+            type="submit"
+          >
+            {isSubmitting ? "Posting..." : "Post"}
+          </button>
+        </form>
+      )}
     </section>
   );
 }

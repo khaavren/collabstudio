@@ -74,6 +74,8 @@ const defaultGenerate: GenerateInput = {
   referenceFile: null,
   generationMode: "auto"
 };
+const workspaceContentRoles = new Set(["owner", "admin", "editor"]);
+const workspaceManagerRoles = new Set(["owner", "admin"]);
 
 function inferConversationMode(prompt: string): "text" | "auto" {
   const normalized = prompt.trim().toLowerCase();
@@ -164,6 +166,7 @@ export function RoomPage() {
     }>
   >([]);
   const [isInviteOpen, setIsInviteOpen] = useState(false);
+  const [isWorkspaceContextLoading, setIsWorkspaceContextLoading] = useState(false);
 
   const activeRoomSlug = params.roomId ?? roomSlug;
 
@@ -178,6 +181,21 @@ export function RoomPage() {
     [assets, selectedAssetId]
   );
   const actorName = currentActor?.displayName ?? "Collaborator";
+  const workspaceRole = useMemo(() => {
+    if (!activeWorkspaceId || !currentActor?.email) return null;
+    const normalizedEmail = currentActor.email.trim().toLowerCase();
+    return workspaceCollaborators.find((collaborator) => collaborator.email.trim().toLowerCase() === normalizedEmail)?.role ?? null;
+  }, [activeWorkspaceId, currentActor?.email, workspaceCollaborators]);
+  const canEditWorkspaceContent = useMemo(() => {
+    if (!activeWorkspaceId) return true;
+    if (isWorkspaceContextLoading || !currentActor?.email) return false;
+    return workspaceContentRoles.has(workspaceRole ?? "");
+  }, [activeWorkspaceId, currentActor?.email, isWorkspaceContextLoading, workspaceRole]);
+  const canManageWorkspace = useMemo(() => {
+    if (!activeWorkspaceId) return true;
+    if (isWorkspaceContextLoading || !currentActor?.email) return false;
+    return workspaceManagerRoles.has(workspaceRole ?? "");
+  }, [activeWorkspaceId, currentActor?.email, isWorkspaceContextLoading, workspaceRole]);
 
   const filteredAssets = useMemo(() => {
     return assets.filter((asset) => {
@@ -242,15 +260,29 @@ export function RoomPage() {
     async function loadWorkspaceContext() {
       if (!activeWorkspaceId) {
         if (!active) return;
+        setIsWorkspaceContextLoading(false);
         setWorkspaceName("Workspace");
         setWorkspaceCollaborators([]);
         return;
       }
 
-      const workspace = await fetchWorkspaceById(activeWorkspaceId);
       if (!active) return;
-      setWorkspaceName(workspace?.name ?? "Workspace");
-      setWorkspaceCollaborators(workspace?.collaboratorsList ?? []);
+      setIsWorkspaceContextLoading(true);
+
+      try {
+        const workspace = await fetchWorkspaceById(activeWorkspaceId);
+        if (!active) return;
+        setWorkspaceName(workspace?.name ?? "Workspace");
+        setWorkspaceCollaborators(workspace?.collaboratorsList ?? []);
+      } catch (caughtError) {
+        if (!active) return;
+        setWorkspaceName("Workspace");
+        setWorkspaceCollaborators([]);
+        setError(caughtError instanceof Error ? caughtError.message : "Unable to load workspace.");
+      } finally {
+        if (!active) return;
+        setIsWorkspaceContextLoading(false);
+      }
     }
 
     void loadWorkspaceContext();
@@ -405,6 +437,11 @@ export function RoomPage() {
   }, [loadAssetsData, loadInspectorData, selectedAssetId]);
 
   async function handleCreateRoom() {
+    if (!canEditWorkspaceContent) {
+      setError("Viewer access is read-only in this workspace.");
+      return;
+    }
+
     const name = window.prompt("New room name");
     if (!name) return;
 
@@ -424,6 +461,11 @@ export function RoomPage() {
   }
 
   async function handleRenameRoom(targetRoom: Room, name: string) {
+    if (!canEditWorkspaceContent) {
+      setError("Viewer access is read-only in this workspace.");
+      return false;
+    }
+
     const nextName = name.trim();
     if (!nextName) return false;
     if (nextName === targetRoom.name) return true;
@@ -453,6 +495,11 @@ export function RoomPage() {
   }
 
   async function handleDeleteRoom(targetRoom: Room) {
+    if (!canEditWorkspaceContent) {
+      setError("Viewer access is read-only in this workspace.");
+      return false;
+    }
+
     const confirmed = window.confirm(
       `Delete room "${targetRoom.name}"? This also deletes all projects in this room.`
     );
@@ -500,6 +547,12 @@ export function RoomPage() {
   }
 
   async function handleGenerate(input: GenerateInput) {
+    if (!canEditWorkspaceContent) {
+      const message = "Viewer access is read-only in this workspace.";
+      setError(message);
+      throw new Error(message);
+    }
+
     try {
       let targetRoom = activeRoom;
       if (!targetRoom) {
@@ -561,6 +614,11 @@ export function RoomPage() {
   }
 
   async function handleAddComment(content: string) {
+    if (!canEditWorkspaceContent) {
+      setError("Viewer access is read-only in this workspace.");
+      return;
+    }
+
     if (!selectedAssetId) return;
 
     try {
@@ -572,6 +630,11 @@ export function RoomPage() {
   }
 
   async function handleSendPrompt(prompt: string, referenceFile: File | null, model: string | null) {
+    if (!canEditWorkspaceContent) {
+      setError("Viewer access is read-only in this workspace.");
+      return;
+    }
+
     if (!selectedAsset) return;
 
     const baseVersion =
@@ -624,6 +687,11 @@ export function RoomPage() {
     tags: string[];
     description: string;
   }) {
+    if (!canEditWorkspaceContent) {
+      setError("Viewer access is read-only in this workspace.");
+      return false;
+    }
+
     const previousAssets = assets;
 
     setAssets((current) =>
@@ -660,6 +728,11 @@ export function RoomPage() {
   }
 
   async function handleDeleteAsset(assetId: string) {
+    if (!canEditWorkspaceContent) {
+      setError("Viewer access is read-only in this workspace.");
+      return false;
+    }
+
     const targetAsset = assets.find((asset) => asset.id === assetId);
     const label = targetAsset?.title ?? "this project";
     const confirmed = window.confirm(`Delete "${label}"? This action cannot be undone.`);
@@ -695,6 +768,11 @@ export function RoomPage() {
   }
 
   async function handleDeleteVersion(version: AssetVersion) {
+    if (!canEditWorkspaceContent) {
+      setError("Viewer access is read-only in this workspace.");
+      return;
+    }
+
     const confirmed = window.confirm(`Delete turn ${version.version}? This cannot be undone.`);
     if (!confirmed) {
       return;
@@ -732,12 +810,23 @@ export function RoomPage() {
 
   async function refreshWorkspaceCollaborators() {
     if (!activeWorkspaceId) return;
-    const workspace = await fetchWorkspaceById(activeWorkspaceId);
-    setWorkspaceName(workspace?.name ?? "Workspace");
-    setWorkspaceCollaborators(workspace?.collaboratorsList ?? []);
+    setIsWorkspaceContextLoading(true);
+    try {
+      const workspace = await fetchWorkspaceById(activeWorkspaceId);
+      setWorkspaceName(workspace?.name ?? "Workspace");
+      setWorkspaceCollaborators(workspace?.collaboratorsList ?? []);
+    } finally {
+      setIsWorkspaceContextLoading(false);
+    }
   }
 
   async function handleInviteCollaborator(identity: string, role: string) {
+    if (!canManageWorkspace) {
+      const message = "Only workspace admins can manage collaborators.";
+      setError(message);
+      throw new Error(message);
+    }
+
     if (!activeWorkspaceId) return;
     const normalizedRole = role === "admin" || role === "editor" || role === "viewer" ? role : "viewer";
 
@@ -760,6 +849,12 @@ export function RoomPage() {
   }
 
   async function handleRemoveCollaborator(collaboratorId: string) {
+    if (!canManageWorkspace) {
+      const message = "Only workspace admins can manage collaborators.";
+      setError(message);
+      throw new Error(message);
+    }
+
     try {
       const result = await removeWorkspaceCollaborator(collaboratorId);
       await refreshWorkspaceCollaborators();
@@ -773,6 +868,11 @@ export function RoomPage() {
   }
 
   function handleRoleChange(collaboratorId: string, newRole: string) {
+    if (!canManageWorkspace) {
+      setError("Only workspace admins can manage collaborators.");
+      return;
+    }
+
     if (newRole !== "admin" && newRole !== "editor" && newRole !== "viewer") return;
 
     void (async () => {
@@ -798,6 +898,7 @@ export function RoomPage() {
     <div className="flex h-screen bg-[var(--background)] text-[var(--foreground)]">
       <Sidebar
         activeSlug={activeRoomSlug}
+        canManageRooms={canEditWorkspaceContent}
         onCreateRoom={handleCreateRoom}
         onDeleteRoom={handleDeleteRoom}
         onRenameRoom={handleRenameRoom}
@@ -865,12 +966,14 @@ export function RoomPage() {
               }}
               onSelectVersion={setActiveVersionId}
               onSendPrompt={handleSendPrompt}
+              readOnly={!canEditWorkspaceContent}
               versions={versions}
             />
           </Suspense>
         ) : (
           <>
             <PageHeader
+              canGenerate={canEditWorkspaceContent}
               collaboratorCount={visibleCollaboratorCount}
               projectCount={filteredAssets.length}
               filter={filter}
@@ -879,7 +982,7 @@ export function RoomPage() {
                 setGeneratePreset(defaultGenerate);
                 setIsGenerateOpen(true);
               }}
-              onManageCollaborators={activeWorkspaceId ? () => setIsInviteOpen(true) : undefined}
+              onManageCollaborators={activeWorkspaceId && canManageWorkspace ? () => setIsInviteOpen(true) : undefined}
               onSearchChange={setSearch}
               roomTitle={activeRoom?.name ?? "Room"}
               searchValue={search}
@@ -888,12 +991,18 @@ export function RoomPage() {
             <main className="min-h-0 flex-1 overflow-y-auto p-6">
               {filteredAssets.length === 0 ? (
                 <div className="flex min-h-[calc(100vh-220px)] items-center justify-center">
-                  <Suspense fallback={<PanelLoadingState label="Loading prompt composer..." />}>
-                    <GenerateInlinePanel
-                      initialValues={defaultGenerate}
-                      onGenerate={handleGenerate}
-                    />
-                  </Suspense>
+                  {canEditWorkspaceContent ? (
+                    <Suspense fallback={<PanelLoadingState label="Loading prompt composer..." />}>
+                      <GenerateInlinePanel
+                        initialValues={defaultGenerate}
+                        onGenerate={handleGenerate}
+                      />
+                    </Suspense>
+                  ) : (
+                    <div className="w-full max-w-xl rounded-xl border border-[var(--border)] bg-[var(--card)] p-5 text-sm text-[var(--muted-foreground)]">
+                      Viewer access is read-only. You can browse rooms and projects in this workspace, but you cannot create rooms, prompts, comments, or edits.
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -902,7 +1011,7 @@ export function RoomPage() {
                       asset={asset}
                       isSelected={asset.id === selectedAssetId}
                       key={asset.id}
-                      onEdit={() => setEditingGridAsset(asset)}
+                      onEdit={canEditWorkspaceContent ? () => setEditingGridAsset(asset) : undefined}
                       onSelect={() => {
                         setSelectedAssetId(asset.id);
                         setActiveVersionId(null);
@@ -927,7 +1036,7 @@ export function RoomPage() {
         </Suspense>
       ) : null}
 
-      {editingGridAsset ? (
+      {editingGridAsset && canEditWorkspaceContent ? (
         <Suspense fallback={null}>
           <EditAssetModal
             assetDescription={editingGridAsset.description}
@@ -958,7 +1067,7 @@ export function RoomPage() {
         </Suspense>
       ) : null}
 
-      {activeWorkspaceId && isInviteOpen ? (
+      {activeWorkspaceId && isInviteOpen && canManageWorkspace ? (
         <Suspense fallback={null}>
           <InviteCollaboratorsModal
             currentCollaborators={workspaceCollaborators}

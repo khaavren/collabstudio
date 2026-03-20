@@ -78,6 +78,99 @@ as $$
   );
 $$;
 
+create or replace function public.is_workspace_editor(target_workspace_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.workspace_collaborators wc
+    where wc.workspace_id = target_workspace_id
+      and wc.role in ('owner', 'admin', 'editor')
+      and (
+        wc.user_id = auth.uid()
+        or lower(wc.email) = public.current_user_email()
+      )
+  );
+$$;
+
+create or replace function public.can_view_room(target_room_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.rooms r
+    where r.id = target_room_id
+      and (
+        r.workspace_id is null
+        or public.is_workspace_member(r.workspace_id)
+      )
+  );
+$$;
+
+create or replace function public.can_edit_room(target_room_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.rooms r
+    where r.id = target_room_id
+      and (
+        r.workspace_id is null
+        or public.is_workspace_editor(r.workspace_id)
+      )
+  );
+$$;
+
+create or replace function public.can_view_asset(target_asset_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.assets a
+    join public.rooms r on r.id = a.room_id
+    where a.id = target_asset_id
+      and (
+        r.workspace_id is null
+        or public.is_workspace_member(r.workspace_id)
+      )
+  );
+$$;
+
+create or replace function public.can_edit_asset(target_asset_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.assets a
+    join public.rooms r on r.id = a.room_id
+    where a.id = target_asset_id
+      and (
+        r.workspace_id is null
+        or public.is_workspace_editor(r.workspace_id)
+      )
+  );
+$$;
+
 create table if not exists rooms (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid references workspaces(id) on delete cascade,
@@ -310,70 +403,139 @@ using (
 );
 
 drop policy if exists "rooms_public_read" on rooms;
-create policy "rooms_public_read" on rooms
-for select to public
-using (true);
-
 drop policy if exists "rooms_authenticated_write" on rooms;
-create policy "rooms_authenticated_write" on rooms
-for all to authenticated
-using (true)
-with check (true);
+drop policy if exists "rooms_select_visible" on rooms;
+drop policy if exists "rooms_insert_editor" on rooms;
+drop policy if exists "rooms_update_editor" on rooms;
+drop policy if exists "rooms_delete_editor" on rooms;
+create policy "rooms_select_visible" on rooms
+for select to authenticated
+using (
+  workspace_id is null
+  or public.is_workspace_member(workspace_id)
+);
+create policy "rooms_insert_editor" on rooms
+for insert to authenticated
+with check (
+  workspace_id is null
+  or public.is_workspace_editor(workspace_id)
+);
+create policy "rooms_update_editor" on rooms
+for update to authenticated
+using (
+  workspace_id is null
+  or public.is_workspace_editor(workspace_id)
+)
+with check (
+  workspace_id is null
+  or public.is_workspace_editor(workspace_id)
+);
+create policy "rooms_delete_editor" on rooms
+for delete to authenticated
+using (
+  workspace_id is null
+  or public.is_workspace_editor(workspace_id)
+);
 
 drop policy if exists "assets_public_read" on assets;
-create policy "assets_public_read" on assets
-for select to public
-using (true);
-
 drop policy if exists "assets_authenticated_write" on assets;
-create policy "assets_authenticated_write" on assets
-for all to authenticated
-using (true)
-with check (true);
+drop policy if exists "assets_select_visible" on assets;
+drop policy if exists "assets_insert_editor" on assets;
+drop policy if exists "assets_update_editor" on assets;
+drop policy if exists "assets_delete_editor" on assets;
+create policy "assets_select_visible" on assets
+for select to authenticated
+using (public.can_view_asset(id));
+create policy "assets_insert_editor" on assets
+for insert to authenticated
+with check (public.can_edit_room(room_id));
+create policy "assets_update_editor" on assets
+for update to authenticated
+using (public.can_edit_asset(id))
+with check (public.can_edit_room(room_id));
+create policy "assets_delete_editor" on assets
+for delete to authenticated
+using (public.can_edit_asset(id));
 
 drop policy if exists "asset_tags_public_read" on asset_tags;
-create policy "asset_tags_public_read" on asset_tags
-for select to public
-using (true);
-
 drop policy if exists "asset_tags_authenticated_write" on asset_tags;
-create policy "asset_tags_authenticated_write" on asset_tags
-for all to authenticated
-using (true)
-with check (true);
+drop policy if exists "asset_tags_select_visible" on asset_tags;
+drop policy if exists "asset_tags_insert_editor" on asset_tags;
+drop policy if exists "asset_tags_update_editor" on asset_tags;
+drop policy if exists "asset_tags_delete_editor" on asset_tags;
+create policy "asset_tags_select_visible" on asset_tags
+for select to authenticated
+using (public.can_view_asset(asset_id));
+create policy "asset_tags_insert_editor" on asset_tags
+for insert to authenticated
+with check (public.can_edit_asset(asset_id));
+create policy "asset_tags_update_editor" on asset_tags
+for update to authenticated
+using (public.can_edit_asset(asset_id))
+with check (public.can_edit_asset(asset_id));
+create policy "asset_tags_delete_editor" on asset_tags
+for delete to authenticated
+using (public.can_edit_asset(asset_id));
 
 drop policy if exists "asset_versions_public_read" on asset_versions;
-create policy "asset_versions_public_read" on asset_versions
-for select to public
-using (true);
-
 drop policy if exists "asset_versions_authenticated_write" on asset_versions;
-create policy "asset_versions_authenticated_write" on asset_versions
-for all to authenticated
-using (true)
-with check (true);
+drop policy if exists "asset_versions_select_visible" on asset_versions;
+drop policy if exists "asset_versions_insert_editor" on asset_versions;
+drop policy if exists "asset_versions_update_editor" on asset_versions;
+drop policy if exists "asset_versions_delete_editor" on asset_versions;
+create policy "asset_versions_select_visible" on asset_versions
+for select to authenticated
+using (public.can_view_asset(asset_id));
+create policy "asset_versions_insert_editor" on asset_versions
+for insert to authenticated
+with check (public.can_edit_asset(asset_id));
+create policy "asset_versions_update_editor" on asset_versions
+for update to authenticated
+using (public.can_edit_asset(asset_id))
+with check (public.can_edit_asset(asset_id));
+create policy "asset_versions_delete_editor" on asset_versions
+for delete to authenticated
+using (public.can_edit_asset(asset_id));
 
 drop policy if exists "annotations_public_read" on annotations;
-create policy "annotations_public_read" on annotations
-for select to public
-using (true);
-
 drop policy if exists "annotations_authenticated_write" on annotations;
-create policy "annotations_authenticated_write" on annotations
-for all to authenticated
-using (true)
-with check (true);
+drop policy if exists "annotations_select_visible" on annotations;
+drop policy if exists "annotations_insert_editor" on annotations;
+drop policy if exists "annotations_update_editor" on annotations;
+drop policy if exists "annotations_delete_editor" on annotations;
+create policy "annotations_select_visible" on annotations
+for select to authenticated
+using (public.can_view_asset(asset_id));
+create policy "annotations_insert_editor" on annotations
+for insert to authenticated
+with check (public.can_edit_asset(asset_id));
+create policy "annotations_update_editor" on annotations
+for update to authenticated
+using (public.can_edit_asset(asset_id))
+with check (public.can_edit_asset(asset_id));
+create policy "annotations_delete_editor" on annotations
+for delete to authenticated
+using (public.can_edit_asset(asset_id));
 
 drop policy if exists "comments_public_read" on comments;
-create policy "comments_public_read" on comments
-for select to public
-using (true);
-
 drop policy if exists "comments_authenticated_write" on comments;
-create policy "comments_authenticated_write" on comments
-for all to authenticated
-using (true)
-with check (true);
+drop policy if exists "comments_select_visible" on comments;
+drop policy if exists "comments_insert_editor" on comments;
+drop policy if exists "comments_update_editor" on comments;
+drop policy if exists "comments_delete_editor" on comments;
+create policy "comments_select_visible" on comments
+for select to authenticated
+using (public.can_view_asset(asset_id));
+create policy "comments_insert_editor" on comments
+for insert to authenticated
+with check (public.can_edit_asset(asset_id));
+create policy "comments_update_editor" on comments
+for update to authenticated
+using (public.can_edit_asset(asset_id))
+with check (public.can_edit_asset(asset_id));
+create policy "comments_delete_editor" on comments
+for delete to authenticated
+using (public.can_edit_asset(asset_id));
 
 drop trigger if exists rooms_set_updated_at on rooms;
 create trigger rooms_set_updated_at

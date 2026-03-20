@@ -2,6 +2,7 @@ import { Plus, Search } from "lucide-react";
 import type { AssetFilter } from "@/lib/types";
 
 type PageHeaderProps = {
+  canGenerate?: boolean;
   collaboratorCount: number;
   projectCount: number;
   filter: AssetFilter;
@@ -14,6 +15,7 @@ type PageHeaderProps = {
 };
 
 export function PageHeader({
+  canGenerate = true,
   collaboratorCount,
   projectCount,
   filter,
@@ -70,13 +72,15 @@ export function PageHeader({
           <option value="Kits">Kits</option>
         </select>
 
-        <button
-          className="rounded-lg bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
-          onClick={onGenerate}
-          type="button"
-        >
-          Generate
-        </button>
+        {canGenerate ? (
+          <button
+            className="rounded-lg bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
+            onClick={onGenerate}
+            type="button"
+          >
+            Generate
+          </button>
+        ) : null}
       </div>
     </header>
   );
